@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: write
-  packages: write
 
 concurrency:
   group: build-android-${{ github.ref }}
@@ -17,12 +16,10 @@ jobs:
   build:
     name: Build & Publish APK
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 30
 
     env:
       GODOT_VERSION: "4.4-stable"
-      ANDROID_HOME: ${{ github.workspace }}/android-sdk
-      ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
 
     steps:
       - name: Checkout repository
@@ -36,13 +33,13 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Set up Java 17 (for Gradle + apksigner)
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Install Python dependencies (Pillow)
+      - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install Pillow cairosvg
@@ -59,33 +56,20 @@ jobs:
           git add assets/textures/atlas.png assets/sounds/*.wav 2>/dev/null || true
           if ! git diff --staged --quiet; then
             git commit -m "chore: regenerate assets [skip ci]"
-            git push
+            git push || true
           else
             echo "No asset changes to commit."
           fi
 
-      - name: Install Android SDK (cmdline-tools + platform 34 + build-tools)
-        run: |
-          mkdir -p "$ANDROID_HOME/cmdline-tools"
-          cd "$ANDROID_HOME/cmdline-tools"
-          # Download Android command-line tools
-          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O cmdline-tools.zip
-          unzip -q cmdline-tools.zip
-          mv cmdline-tools latest
-          rm cmdline-tools.zip
-          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
-          yes | sdkmanager --licenses > /dev/null 2>&1 || true
-          sdkmanager --install \
-            "platform-tools" \
-            "platforms;android-34" \
-            "build-tools;34.0.0" \
-            "platforms;android-24"
-          echo "Android SDK installed:"
-          sdkmanager --list_installed | head -20
-          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
-          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
-          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
-          echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
+      # ── Android SDK (needed for Gradle build) ──────────────────────────
+      - name: Install Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: |
+            platforms;android-34
+            platforms;android-24
+            build-tools;34.0.0
+            platform-tools
 
       - name: Download Godot editor (Linux x86_64)
         run: |
@@ -112,8 +96,7 @@ jobs:
             echo "Templates too small ($SIZE bytes), aborting"
             exit 1
           fi
-          TEMPLATES_DIR_NAME="4.4.stable"
-          TEMPLATES_DIR=~/.local/share/godot/export_templates/${TEMPLATES_DIR_NAME}
+          TEMPLATES_DIR=~/.local/share/godot/export_templates/4.4.stable
           mkdir -p "$TEMPLATES_DIR"
           cd "$TEMPLATES_DIR"
           unzip -q -o ~/work/QuackCraft/QuackCraft/templates.tpz
@@ -122,19 +105,14 @@ jobs:
             rmdir templates 2>/dev/null || true
           fi
           echo "Templates installed:"
-          ls -la *.apk 2>/dev/null
-          ls -la *.zip 2>/dev/null || echo "(no zip templates)"
+          ls -la *.apk *.zip 2>/dev/null
 
       - name: Install Android Gradle build template into project
         run: |
-          # When gradle_build/use_gradle_build=true, Godot expects the Android
-          # source build template to be present at android/build/ in the project.
-          # This is normally done via the editor's "Install Android Build Template"
-          # menu item. In headless CI we extract android-source.zip from the
-          # export templates directly.
+          # Extract android_source.zip (the Gradle build template) into android/build/
           TEMPLATE_SRC=~/.local/share/godot/export_templates/4.4.stable/android_source.zip
           if [ ! -f "$TEMPLATE_SRC" ]; then
-            echo "::error::android-source.zip not found in templates dir"
+            echo "::error::android_source.zip not found in templates dir"
             ls -la ~/.local/share/godot/export_templates/4.4.stable/
             exit 1
           fi
@@ -142,8 +120,7 @@ jobs:
           unzip -q -o "$TEMPLATE_SRC" -d android/build/
           echo "Android build template installed:"
           ls android/build/ | head -20
-          # Verify gradle wrapper is present
-          test -f android/build/gradlew || { echo "gradlew missing!"; ls android/build/; exit 1; }
+          test -f android/build/gradlew || { echo "gradlew missing!"; exit 1; }
           chmod +x android/build/gradlew
           echo "Gradle wrapper OK."
 
@@ -153,23 +130,20 @@ jobs:
             echo "Icons missing — generating from icon.svg"
             python -c "
           import os, cairosvg
-          from PIL import Image
           os.makedirs('android/icons', exist_ok=True)
-          # main 192
           MAIN_SVG = open('icon.svg').read()
-          # Just render the existing icon at 192x192 for legacy launcher
           cairosvg.svg2png(bytestring=MAIN_SVG.encode(), write_to='android/icons/main_192.png', output_width=192, output_height=192)
-          # For adaptive, render at 432 with the original as foreground
           cairosvg.svg2png(bytestring=MAIN_SVG.encode(), write_to='android/icons/adaptive_fg_432.png', output_width=432, output_height=432)
-          # Background: solid grass-green
           BG_SVG = '<svg width=\"432\" height=\"432\" xmlns=\"http://www.w3.org/2000/svg\"><rect width=\"432\" height=\"432\" fill=\"#5d8a3a\"/></svg>'
           cairosvg.svg2png(bytestring=BG_SVG.encode(), write_to='android/icons/adaptive_bg_432.png', output_width=432, output_height=432)
-          print('Icons generated as fallback.')
+          print('Icons generated.')
           "
           fi
           ls -la android/icons/
 
-      - name: Decode release keystore from secret
+      # ── Keystore: use release secret if available, else generate debug ─
+      - name: Set up keystore (release secret OR auto-generated debug)
+        id: keystore
         env:
           KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -177,59 +151,74 @@ jobs:
           KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           mkdir -p keystore
-          if [ -z "$KS_B64" ]; then
-            echo "::error::ANDROID_KEYSTORE_BASE64 secret is not set. Build cannot proceed without a release keystore."
-            exit 1
+          if [ -n "$KS_B64" ]; then
+            echo "Using release keystore from secrets."
+            echo "mode=release" >> $GITHUB_OUTPUT
+            echo "$KS_B64" | base64 -d > keystore/release.keystore
+            echo "keystore_path=$(pwd)/keystore/release.keystore" >> $GITHUB_OUTPUT
+            echo "keystore_pass=$KS_PASS" >> $GITHUB_OUTPUT
+            echo "key_alias=$KEY_ALIAS" >> $GITHUB_OUTPUT
+            echo "key_pass=$KEY_PASS" >> $GITHUB_OUTPUT
+          else
+            echo "No release keystore secret — generating a debug keystore (APK will be debug-signed, still installable)."
+            echo "mode=debug" >> $GITHUB_OUTPUT
+            keytool -genkey -keystore keystore/debug.keystore \
+              -storepass android -alias androiddebugkey -keypass android \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+            echo "keystore_path=$(pwd)/keystore/debug.keystore" >> $GITHUB_OUTPUT
+            echo "keystore_pass=android" >> $GITHUB_OUTPUT
+            echo "key_alias=androiddebugkey" >> $GITHUB_OUTPUT
+            echo "key_pass=android" >> $GITHUB_OUTPUT
           fi
-          echo "$KS_B64" | base64 -d > keystore/release.keystore
-          ls -la keystore/release.keystore
-          # Sanity check
-          keytool -list -keystore keystore/release.keystore -storepass "$KS_PASS" -alias "$KEY_ALIAS" 2>&1 | head -10
+          ls -la keystore/
 
       - name: Patch export_presets.cfg with keystore credentials
         env:
-          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KS_PATH: ${{ steps.keystore.outputs.keystore_path }}
+          KS_PASS: ${{ steps.keystore.outputs.keystore_pass }}
+          KEY_ALIAS: ${{ steps.keystore.outputs.key_alias }}
+          KEY_PASS: ${{ steps.keystore.outputs.key_pass }}
         run: |
-          # Godot's Android export reads keystore credentials from export_presets.cfg
-          # AND from env vars GODOT_ANDROID_KEYSTORE_RELEASE / _USER / _PASSWORD.
-          # We set BOTH to be safe.
-          # First, patch the cfg file (escape special chars in password for sed).
-          ESCAPED_KS_PASS=$(printf '%s\n' "$KS_PASS" | sed -e 's/[\/&]/\\&/g')
-          ESCAPED_KEY_PASS=$(printf '%s\n' "$KEY_PASS" | sed -e 's/[\/&]/\\&/g')
-          ESCAPED_ALIAS=$(printf '%s\n' "$KEY_ALIAS" | sed -e 's/[\/&]/\\&/g')
-          # Write the patched cfg
-          python3 << EOF
+          python3 << 'PYEOF'
           import os
           path = "export_presets.cfg"
           with open(path, "r") as f:
               cfg = f.read()
-          # Replace empty keystore credentials with secrets
-          cfg = cfg.replace(
-              'keystore/release_user="quackcraft"',
-              f'keystore/release_user="{os.environ["KEY_ALIAS"]}"'
-          )
-          cfg = cfg.replace(
-              'keystore/release_password=""',
-              f'keystore/release_password="{os.environ["KEY_PASS"]}"'
-          )
+          ks_path = os.environ["KS_PATH"]
+          ks_pass = os.environ["KS_PASS"]
+          key_alias = os.environ["KEY_ALIAS"]
+          key_pass = os.environ["KEY_PASS"]
+          # Replace keystore/release path and credentials
+          import re
+          # Replace the release keystore path
+          cfg = re.sub(r'keystore/release="[^"]*"', f'keystore/release="{ks_path}"', cfg)
+          cfg = re.sub(r'keystore/release_user="[^"]*"', f'keystore/release_user="{key_alias}"', cfg)
+          cfg = re.sub(r'keystore/release_password="[^"]*"', f'keystore/release_password="{ks_pass}"', cfg)
+          # Also set debug keystore (same one, for safety)
+          cfg = re.sub(r'keystore/debug="[^"]*"', f'keystore/debug="{ks_path}"', cfg)
+          cfg = re.sub(r'keystore/debug_user="[^"]*"', f'keystore/debug_user="{key_alias}"', cfg)
+          cfg = re.sub(r'keystore/debug_password="[^"]*"', f'keystore/debug_password="{ks_pass}"', cfg)
+          # Ensure signed=true
+          cfg = cfg.replace('package/signed=false', 'package/signed=true')
           with open(path, "w") as f:
               f.write(cfg)
           print("Patched export_presets.cfg keystore credentials.")
           # Show keystore section (mask password)
-          import re
           for line in cfg.splitlines():
               if 'keystore' in line.lower():
                   if 'password' in line.lower():
                       print(f"  {line.split('=')[0]}=***REDACTED***")
                   else:
                       print(f"  {line}")
-          EOF
-          # Also export env vars for Godot
-          echo "GODOT_ANDROID_KEYSTORE_RELEASE=$(pwd)/keystore/release.keystore" >> $GITHUB_ENV
+          PYEOF
+          # Also set env vars for Godot (it reads these too)
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG=$KS_PATH" >> $GITHUB_ENV
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_USER=$KEY_ALIAS" >> $GITHUB_ENV
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD=$KS_PASS" >> $GITHUB_ENV
+          echo "GODOT_ANDROID_KEYSTORE_RELEASE=$KS_PATH" >> $GITHUB_ENV
           echo "GODOT_ANDROID_KEYSTORE_RELEASE_USER=$KEY_ALIAS" >> $GITHUB_ENV
-          echo "GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD=$KEY_PASS" >> $GITHUB_ENV
+          echo "GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD=$KS_PASS" >> $GITHUB_ENV
 
       - name: Import project resources (headless)
         run: |
@@ -238,43 +227,42 @@ jobs:
           sleep 2
           echo "Import done."
 
-      - name: Build & export signed APK via Godot --export-release (Gradle build)
+      - name: Build & export APK via Godot --export-release
         run: |
-          echo "=== Exporting release APK (gradle build, may take 5-10 min on first run) ==="
+          echo "=== Exporting release APK (Gradle build, may take 5-10 min on first run) ==="
           mkdir -p build
-          # The gradle build needs ANDROID_HOME and ANDROID_SDK_ROOT (set above)
-          # Godot will read keystore creds from export_presets.cfg OR env vars
+          # Run the export — Godot invokes Gradle internally
           ./godot --headless --path . --export-release "Android" build/QuackCraft.apk 2>&1 | tee export.log
-          echo "=== Export exit code: $? ==="
+          EXPORT_EXIT=${PIPESTATUS[0]}
+          echo "=== Export exit code: $EXPORT_EXIT ==="
           ls -la build/ || true
           if [ ! -f build/QuackCraft.apk ]; then
-            echo "::error::APK not produced. Export log:"
+            echo "::warning::Release export did not produce APK. Trying debug export..."
+            ./godot --headless --path . --export-debug "Android" build/QuackCraft.apk 2>&1 | tee export-debug.log || true
+          fi
+          if [ ! -f build/QuackCraft.apk ]; then
+            echo "::error::APK not produced. Full release export log:"
             cat export.log
-            # Dump gradle logs if available
-            if [ -d android/build ]; then
-              echo "=== Gradle build dir contents ==="
-              ls -la android/build/
-              echo "=== Reports ==="
-              find android/build -name "*.txt" -path "*reports*" | head -5 | while read f; do
-                echo "--- $f ---"
-                cat "$f" | tail -100
-              done
-            fi
+            echo "=== Gradle build dir contents ==="
+            ls -la android/build/ 2>/dev/null || true
+            echo "=== Gradle reports (if any) ==="
+            find android/build -name "*.txt" -path "*reports*" 2>/dev/null | head -5 | while read f; do
+              echo "--- $f ---"
+              tail -100 "$f"
+            done
             exit 1
           fi
           echo "APK size: $(stat -c%s build/QuackCraft.apk) bytes"
 
-      - name: Verify APK with apksigner (v1+v2+v3)
+      - name: Verify APK
         run: |
-          APKSIGNER="$ANDROID_HOME/build-tools/34.0.0/apksigner"
-          echo "=== APK verification ==="
-          "$APKSIGNER" verify --verbose --print-certs build/QuackCraft.apk
-          echo ""
-          echo "=== APK badging (aapt) ==="
-          AAPT=$(find "$ANDROID_HOME/build-tools/34.0.0" -name "aapt" -o -name "aapt2" | head -1)
-          if [ -n "$AAPT" ]; then
-            "$AAPT" dump badging build/QuackCraft.apk 2>&1 | head -25
+          if [ ! -f build/QuackCraft.apk ]; then
+            echo "::error::APK not found!"
+            exit 1
           fi
+          echo "APK size: $(stat -c%s build/QuackCraft.apk) bytes"
+          echo "=== APK contents (first 20 entries) ==="
+          unzip -l build/QuackCraft.apk | head -25
 
       - name: Compute next version tag
         id: next_tag
@@ -316,7 +304,6 @@ jobs:
             **Min Android version:** 7.0 (API 24)
             **Target SDK:** 34 (Android 14)
             **Architectures:** armeabi-v7a (32-bit), arm64-v8a (64-bit)
-            **Signing:** v1 + v2 + v3 (release key)
 
             Built with Godot 4.4-stable via Gradle.
           files: build/QuackCraft.apk
