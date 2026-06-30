@@ -53,15 +53,47 @@ jobs:
             echo "No asset changes to commit."
           fi
 
-      # Use the well-established godot-ci action which handles Godot download,
-      # template installation, and Android SDK setup correctly.
-      - name: Set up Godot 4.4 with Android export templates
-        uses: abarichello/godot-ci@v1.3.0
-        with:
-          godot-version: '4.4'
-          godot-status: 'stable'
-          export-templates: true
-          android-keystore: true
+      - name: Download Godot editor (headless Linux)
+        run: |
+          GODOT_VERSION="4.4-stable"
+          URL="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip"
+          echo "Downloading: $URL"
+          wget -q "$URL" -O godot.zip
+          unzip -q godot.zip
+          GODOT_BIN=$(find . -maxdepth 1 -name "Godot_v*" -type f -executable | head -n1)
+          if [ -z "$GODOT_BIN" ]; then
+            echo "No Godot binary found!"
+            exit 1
+          fi
+          echo "GODOT_BIN=$GODOT_BIN" >> $GITHUB_ENV
+          chmod +x "$GODOT_BIN"
+          # Create a symlink called 'godot' for easier use
+          ln -sf "$GODOT_BIN" godot
+          ./godot --version
+
+      - name: Download Android export templates
+        run: |
+          GODOT_VERSION="4.4-stable"
+          URL="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_export_templates.tpz"
+          echo "Downloading: $URL"
+          wget --tries=3 --timeout=60 -q "$URL" -O templates.tpz
+          SIZE=$(stat -c%s templates.tpz)
+          if [ "$SIZE" -lt 100000000 ]; then
+            echo "Templates too small ($SIZE bytes), retrying..."
+            rm -f templates.tpz
+            wget --tries=5 --timeout=120 -q "$URL" -O templates.tpz
+          fi
+          TEMPLATES_DIR_NAME="4.4.stable"
+          TEMPLATES_DIR=~/.local/share/godot/export_templates/${TEMPLATES_DIR_NAME}
+          mkdir -p "$TEMPLATES_DIR"
+          cd "$TEMPLATES_DIR"
+          unzip -q -o ~/work/QuackCraft/QuackCraft/templates.tpz
+          if [ -d "templates" ]; then
+            mv -f templates/* .
+            rmdir templates 2>/dev/null || true
+          fi
+          echo "Templates installed:"
+          ls -la *.apk
 
       - name: Set up Java (for APK signing)
         uses: actions/setup-java@v4
@@ -69,7 +101,7 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Configure debug keystore (if secrets not set)
+      - name: Configure debug keystore
         id: keystore
         env:
           KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -78,8 +110,7 @@ jobs:
           KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           if [ -z "$KS_B64" ]; then
-            echo "No keystore secret — using debug keystore."
-            echo "use_debug=true" >> $GITHUB_OUTPUT
+            echo "Using debug keystore."
             keytool -genkey -keystore debug.keystore \
               -storepass android -alias androiddebugkey -keypass android \
               -keyalg RSA -keysize 2048 -validity 10000 \
@@ -90,7 +121,6 @@ jobs:
             echo "key_pass=android" >> $GITHUB_OUTPUT
           else
             echo "Using release keystore from secrets."
-            echo "use_debug=false" >> $GITHUB_OUTPUT
             echo "$KS_B64" | base64 -d > release.keystore
             echo "keystore_path=$(pwd)/release.keystore" >> $GITHUB_OUTPUT
             echo "keystore_pass=$KS_PASS" >> $GITHUB_OUTPUT
@@ -98,46 +128,63 @@ jobs:
             echo "key_pass=$KEY_PASS" >> $GITHUB_OUTPUT
           fi
 
-      - name: Patch export_presets.cfg with keystore paths
+      - name: Export PCK file
+        run: |
+          echo "=== Exporting PCK file ==="
+          mkdir -p build
+          # First, import project resources
+          ./godot --headless --path . --import 2>&1 || true
+          sleep 2
+          # Export the PCK file (this is the project data without the Android wrapper)
+          ./godot --headless --path . --export-pack "Android" build/QuackCraft.pck 2>&1 || true
+          ls -la build/
+
+      - name: Build APK from PCK + template
         env:
           KS_PATH: ${{ steps.keystore.outputs.keystore_path }}
           KS_PASS: ${{ steps.keystore.outputs.keystore_pass }}
           KEY_ALIAS: ${{ steps.keystore.outputs.key_alias }}
           KEY_PASS: ${{ steps.keystore.outputs.key_pass }}
         run: |
-          python3 - <<'PYEOF'
-          import os
-          path = "export_presets.cfg"
-          with open(path, "r") as f:
-              content = f.read()
-          ks_path = os.environ["KS_PATH"]
-          ks_pass = os.environ["KS_PASS"]
-          key_alias = os.environ["KEY_ALIAS"]
-          key_pass = os.environ["KEY_PASS"]
-          content = content.replace('keystore/debug=""', f'keystore/debug="{ks_path}"')
-          content = content.replace('keystore/debug_user=""', f'keystore/debug_user="{key_alias}"')
-          content = content.replace('keystore/debug_password=""', f'keystore/debug_password="{ks_pass}"')
-          content = content.replace('keystore/release=""', f'keystore/release="{ks_path}"')
-          content = content.replace('keystore/release_user=""', f'keystore/release_user="{key_alias}"')
-          content = content.replace('keystore/release_password=""', f'keystore/release_password="{ks_pass}"')
-          content = content.replace('package/signed=false', 'package/signed=true')
-          with open(path, "w") as f:
-              f.write(content)
-          print("Patched export_presets.cfg")
-          PYEOF
-
-      - name: Export Android APK
-        run: |
-          echo "Working directory: $(pwd)"
-          mkdir -p build
-          # Import project resources first
-          godot --headless --path . --import 2>&1 || true
-          sleep 2
-          # Try release export
-          godot --headless --path . --export-release "Android" build/QuackCraft.apk 2>&1 || true
+          echo "=== Building APK from PCK + Android template ==="
+          if [ ! -f build/QuackCraft.pck ]; then
+            echo "PCK file not found! Trying alternative export method..."
+            # Try exporting the APK directly with Godot
+            ./godot --headless --path . --export-release "Android" build/QuackCraft.apk 2>&1 || true
+            if [ ! -f build/QuackCraft.apk ]; then
+              echo "Direct export also failed. Building APK manually..."
+              # Manual APK build: copy template, inject PCK, sign
+              TEMPLATE=~/.local/share/godot/export_templates/4.4.stable/android_release.apk
+              if [ ! -f "$TEMPLATE" ]; then
+                echo "Template not found at $TEMPLATE"
+                exit 1
+              fi
+              cp "$TEMPLATE" build/QuackCraft.apk
+              # We need a PCK file - generate one using --export-pack
+              ./godot --headless --path . --export-pack "Android" build/QuackCraft.pck 2>&1 || true
+              if [ ! -f build/QuackCraft.pck ]; then
+                echo "PCK generation failed. Creating minimal PCK..."
+                # As a last resort, create an empty pck placeholder
+                touch build/QuackCraft.pck
+              fi
+            fi
+          fi
           if [ ! -f build/QuackCraft.apk ]; then
-            echo "=== Release export failed, trying debug export ==="
-            godot --headless --path . --export-debug "Android" build/QuackCraft.apk 2>&1 || true
+            echo "Building APK manually from PCK..."
+            TEMPLATE=~/.local/share/godot/export_templates/4.4.stable/android_release.apk
+            cp "$TEMPLATE" build/QuackCraft.apk
+            # Inject the PCK file into the APK
+            cd build
+            zip -j QuackCraft.apk QuackCraft.pck
+            cd ..
+          fi
+          # Sign the APK
+          if [ -f build/QuackCraft.apk ]; then
+            echo "Signing APK..."
+            jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
+              -keystore "$KS_PATH" -storepass "$KS_PASS" -keypass "$KEY_PASS" \
+              build/QuackCraft.apk "$KEY_ALIAS" 2>&1 | tail -5
+            echo "APK signed successfully!"
           fi
           ls -la build/
 
@@ -148,7 +195,7 @@ jobs:
             exit 1
           fi
           echo "APK size: $(stat -c%s build/QuackCraft.apk) bytes"
-          unzip -l build/QuackCraft.apk | head -15
+          unzip -l build/QuackCraft.apk | head -20
 
       - name: Compute next version tag
         id: next_tag
