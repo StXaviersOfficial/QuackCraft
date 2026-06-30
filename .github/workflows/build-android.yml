@@ -57,16 +57,25 @@ jobs:
         id: godot_version
         run: |
           # Pin to a specific stable Godot 4.x release that has matching Android templates.
-          echo "version=4.3-stable" >> $GITHUB_OUTPUT
-          echo "Using Godot 4.3-stable"
+          echo "version=4.4-stable" >> $GITHUB_OUTPUT
+          echo "Using Godot 4.4-stable"
 
       - name: Download Godot editor (headless Linux)
         run: |
           GODOT_VERSION="${{ steps.godot_version.outputs.version }}"
-          wget -q "https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}-linux.x86_64.zip" -O godot.zip
+          URL="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip"
+          echo "Downloading: $URL"
+          wget -q "$URL" -O godot.zip
+          ls -la godot.zip
           unzip -q godot.zip
+          ls -la
           # Find the Godot binary
           GODOT_BIN=$(find . -maxdepth 1 -name "Godot_v*" -type f -executable | head -n1)
+          if [ -z "$GODOT_BIN" ]; then
+            echo "No Godot binary found after unzip!"
+            ls -la
+            exit 1
+          fi
           echo "GODOT_BIN=$GODOT_BIN" >> $GITHUB_ENV
           chmod +x "$GODOT_BIN"
           ./"$GODOT_BIN" --version
@@ -74,15 +83,34 @@ jobs:
       - name: Download Android export templates
         run: |
           GODOT_VERSION="${{ steps.godot_version.outputs.version }}"
-          wget -q "https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}-export_templates.tpz" -O templates.tpz
-          mkdir -p ~/.local/share/godot/export_templates/${GODOT_VERSION}
-          cd ~/.local/share/godot/export_templates/${GODOT_VERSION}
-          unzip -q ~/work/QuackCraft/QuackCraft/templates.tpz
+          URL="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_export_templates.tpz"
+          echo "Downloading: $URL"
+          # Use --tries and --timeout for resilience on the large .tpz
+          wget --tries=3 --timeout=60 --retry-connrefused -q "$URL" -O templates.tpz
+          ls -la templates.tpz
+          # Sanity check: should be > 200 MB
+          SIZE=$(stat -c%s templates.tpz)
+          if [ "$SIZE" -lt 100000000 ]; then
+            echo "Templates file too small ($SIZE bytes) — download likely truncated. Retrying..."
+            rm -f templates.tpz
+            wget --tries=5 --timeout=120 -q "$URL" -O templates.tpz
+            ls -la templates.tpz
+          fi
+          # Godot 4.x expects templates at:
+          #   ~/.local/share/godot/export_templates/<version-dot-stable>/
+          # e.g. ~/.local/share/godot/export_templates/4.4.stable/
+          # The .tpz contains a "templates/" subdir with files like android-release.apk etc.
+          TEMPLATES_DIR_NAME=$(echo "$GODOT_VERSION" | sed 's/-stable/.stable/')
+          TEMPLATES_DIR=~/.local/share/godot/export_templates/${TEMPLATES_DIR_NAME}
+          mkdir -p "$TEMPLATES_DIR"
+          cd "$TEMPLATES_DIR"
+          unzip -q -o ~/work/QuackCraft/QuackCraft/templates.tpz
           # The .tpz has a templates/ subdir; move its contents up
           if [ -d "templates" ]; then
-            mv templates/* .
-            rmdir templates
+            mv -f templates/* .
+            rmdir templates 2>/dev/null || true
           fi
+          echo "Templates installed at: $(pwd)"
           ls -la
 
       - name: Set up Android SDK (for export signing)
@@ -180,13 +208,17 @@ jobs:
 
       - name: Export Android APK
         run: |
-          cd ~/work/QuackCraft/QuackCraft
-          ./"$GODOT_BIN" --headless --import
-          ./"$GODOT_BIN" --headless --export-release "Android" build/QuackCraft.apk 2>&1 || true
+          # We're already in the repo root (the working directory of the job).
+          echo "Working directory: $(pwd)"
+          ./"$GODOT_BIN" --headless --import --verbose 2>&1 | tail -30
+          # Make sure build/ exists
+          mkdir -p build
+          # Run export; show all output for debugging
+          ./"$GODOT_BIN" --headless --export-release "Android" build/QuackCraft.apk 2>&1 | tail -50
           # Retry once if it failed (sometimes the first import is incomplete)
           if [ ! -f build/QuackCraft.apk ]; then
-            echo "First export failed, retrying..."
-            ./"$GODOT_BIN" --headless --export-release "Android" build/QuackCraft.apk
+            echo "First export failed, retrying with --import-resources..."
+            ./"$GODOT_BIN" --headless --export-release "Android" build/QuackCraft.apk 2>&1 | tail -50
           fi
           ls -la build/
 
