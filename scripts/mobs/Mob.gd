@@ -109,7 +109,7 @@ func _physics_process(delta: float) -> void:
         if attack_cooldown > 0: attack_cooldown -= delta
         # AI
         if player != null and is_instance_valid(player):
-                var to_player := player.position - position
+                var to_player: Vector3 = player.position - position
                 var dist: float = to_player.length()
                 if hostile and dist < detect_range:
                         state = "chase"
@@ -212,7 +212,7 @@ func _die() -> void:
                 # In a full impl we'd spawn a dropped item entity; for v1, give to player
                 pass
         # Visual: shrink + fade
-        var t: SceneTreeTween = create_tween()
+        var t: Tween = create_tween()
         t.tween_property(mesh_instance, "scale", Vector3(0.01, 0.01, 0.01), 1.0)
         t.parallel().tween_property(mesh_instance, "transparency", 1.0, 1.0)
 
