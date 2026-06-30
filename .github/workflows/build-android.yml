@@ -17,7 +17,7 @@ jobs:
   build:
     name: Build & Publish APK
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
       - name: Checkout repository
@@ -53,73 +53,21 @@ jobs:
             echo "No asset changes to commit."
           fi
 
-      - name: Determine Godot version
-        id: godot_version
-        run: |
-          echo "version=4.4-stable" >> $GITHUB_OUTPUT
-
-      - name: Download Godot editor (headless Linux)
-        run: |
-          GODOT_VERSION="${{ steps.godot_version.outputs.version }}"
-          URL="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip"
-          echo "Downloading: $URL"
-          wget -q "$URL" -O godot.zip
-          unzip -q godot.zip
-          GODOT_BIN=$(find . -maxdepth 1 -name "Godot_v*" -type f -executable | head -n1)
-          if [ -z "$GODOT_BIN" ]; then
-            echo "No Godot binary found after unzip!"
-            ls -la
-            exit 1
-          fi
-          echo "GODOT_BIN=$GODOT_BIN" >> $GITHUB_ENV
-          chmod +x "$GODOT_BIN"
-          ./"$GODOT_BIN" --version
-
-      - name: Download Android export templates
-        run: |
-          GODOT_VERSION="${{ steps.godot_version.outputs.version }}"
-          URL="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_export_templates.tpz"
-          echo "Downloading: $URL"
-          wget --tries=3 --timeout=60 --retry-connrefused -q "$URL" -O templates.tpz
-          SIZE=$(stat -c%s templates.tpz)
-          if [ "$SIZE" -lt 100000000 ]; then
-            echo "Templates file too small ($SIZE bytes) — retrying..."
-            rm -f templates.tpz
-            wget --tries=5 --timeout=120 -q "$URL" -O templates.tpz
-          fi
-          TEMPLATES_DIR_NAME=$(echo "$GODOT_VERSION" | sed 's/-stable/.stable/')
-          TEMPLATES_DIR=~/.local/share/godot/export_templates/${TEMPLATES_DIR_NAME}
-          mkdir -p "$TEMPLATES_DIR"
-          cd "$TEMPLATES_DIR"
-          unzip -q -o ~/work/QuackCraft/QuackCraft/templates.tpz
-          if [ -d "templates" ]; then
-            mv -f templates/* .
-            rmdir templates 2>/dev/null || true
-          fi
-          echo "Templates installed at: $(pwd)"
-          ls -la
+      # Use the well-established godot-ci action which handles Godot download,
+      # template installation, and Android SDK setup correctly.
+      - name: Set up Godot 4.4 with Android export templates
+        uses: abarichello/godot-ci@v1.3.0
+        with:
+          godot-version: '4.4'
+          godot-status: 'stable'
+          export-templates: true
+          android-keystore: true
 
       - name: Set up Java (for APK signing)
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
-
-      - name: Configure Godot editor settings (Android SDK path)
-        run: |
-          mkdir -p ~/.config/godot
-          cat > ~/.config/godot/editor-settings.cfg <<'CFGEOF'
-          [editor]
-          export/android/android_sdk_path = "/usr/local/lib/android/sdk"
-          export/android/debug_keystore = ""
-          export/android/debug_keystore_user = ""
-          export/android/debug_keystore_password = ""
-          export/android/force_system_user = false
-          export/android/shutdown_adb_on_exit = true
-          CFGEOF
-          sed -i 's/^[[:space:]]*//' ~/.config/godot/editor-settings.cfg
-          echo "Wrote editor-settings.cfg:"
-          cat ~/.config/godot/editor-settings.cfg
 
       - name: Configure debug keystore (if secrets not set)
         id: keystore
@@ -181,26 +129,15 @@ jobs:
       - name: Export Android APK
         run: |
           echo "Working directory: $(pwd)"
-          echo "GODOT_BIN=$GODOT_BIN"
           mkdir -p build
-          # Check templates are installed
-          echo "=== Export templates directory ==="
-          TEMPLATES_DIR=~/.local/share/godot/export_templates
-          find "$TEMPLATES_DIR" -type f -name "*.apk" -o -name "*.zip" 2>/dev/null | head -20
-          ls -la "$TEMPLATES_DIR"/4.4.stable/ 2>/dev/null || echo "4.4.stable dir not found"
-          echo "=== End templates check ==="
-          # Check editor settings
-          echo "=== Editor settings ==="
-          cat ~/.config/godot/editor-settings.cfg 2>/dev/null || echo "No editor settings"
-          echo "=== End editor settings ==="
           # Import project resources first
-          ./"$GODOT_BIN" --headless --path . --import 2>&1 || true
-          # Try debug export first (less strict)
-          echo "=== Trying debug export ==="
-          ./"$GODOT_BIN" --headless --path . --export-debug "Android" build/QuackCraft.apk 2>&1 || true
+          godot --headless --path . --import 2>&1 || true
+          sleep 2
+          # Try release export
+          godot --headless --path . --export-release "Android" build/QuackCraft.apk 2>&1 || true
           if [ ! -f build/QuackCraft.apk ]; then
-            echo "=== Debug export failed, trying release export ==="
-            ./"$GODOT_BIN" --headless --path . --export-release "Android" build/QuackCraft.apk 2>&1 || true
+            echo "=== Release export failed, trying debug export ==="
+            godot --headless --path . --export-debug "Android" build/QuackCraft.apk 2>&1 || true
           fi
           ls -la build/
 
