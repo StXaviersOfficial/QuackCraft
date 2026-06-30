@@ -113,13 +113,29 @@ jobs:
           echo "Templates installed at: $(pwd)"
           ls -la
 
-      - name: Set up Android SDK (for export signing)
+      - name: Set up Android SDK & Gradle
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-34 build-tools;34.0.0 platform-tools'
+          sdk-version: '34'
+
+      - name: Set up Java (for Gradle build)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Verify Android SDK
         run: |
-          # Godot 4's Android export can produce an unsigned/debug APK without
-          # the Android SDK if we use the bundled templates. We just need Java
-          # for jarsigner to sign the APK with the debug keystore.
-          sudo apt-get update -y
-          sudo apt-get install -y default-jdk
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          ls -la $ANDROID_HOME 2>/dev/null || ls -la $ANDROID_SDK_ROOT
+          # Accept all SDK licenses
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
+          # Install required SDK components
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools" > /dev/null 2>&1 || true
+          # Make sure gradle is available
+          gradle --version 2>&1 | head -3 || echo "Gradle not yet installed"
 
       - name: Create build output directory
         run: mkdir -p build
@@ -206,19 +222,40 @@ jobs:
           print("Patched export_presets.cfg")
           EOF
 
+      - name: Configure Godot editor settings (Android SDK path)
+        run: |
+          # Godot stores editor settings in ~/.config/godot/editor-settings.cfg on Linux
+          mkdir -p ~/.config/godot
+          cat > ~/.config/godot/editor-settings.cfg <<'EOF'
+          [editor]
+          export/android/android_sdk_path = "$ANDROID_HOME"
+          export/android/debug_keystore = ""
+          export/android/debug_keystore_user = ""
+          export/android/debug_keystore_password = ""
+          export/android/force_system_user = false
+          export/android/shutdown_adb_on_exit = true
+          EOF
+          # Strip leading whitespace from each line (heredoc with <<'EOF' preserves our indentation)
+          sed -i 's/^[[:space:]]*//' ~/.config/godot/editor-settings.cfg
+          # Replace placeholder with actual ANDROID_HOME
+          sed -i "s|\$ANDROID_HOME|$ANDROID_HOME|g" ~/.config/godot/editor-settings.cfg
+          echo "Wrote editor-settings.cfg:"
+          cat ~/.config/godot/editor-settings.cfg
+
       - name: Export Android APK
         run: |
           # We're already in the repo root (the working directory of the job).
           echo "Working directory: $(pwd)"
+          echo "ANDROID_HOME=$ANDROID_HOME"
           ./"$GODOT_BIN" --headless --import --verbose 2>&1 | tail -30
           # Make sure build/ exists
           mkdir -p build
           # Run export; show all output for debugging
-          ./"$GODOT_BIN" --headless --export-release "Android" build/QuackCraft.apk 2>&1 | tail -50
+          ./"$GODOT_BIN" --headless --export-release "Android" build/QuackCraft.apk 2>&1 | tail -80
           # Retry once if it failed (sometimes the first import is incomplete)
           if [ ! -f build/QuackCraft.apk ]; then
-            echo "First export failed, retrying with --import-resources..."
-            ./"$GODOT_BIN" --headless --export-release "Android" build/QuackCraft.apk 2>&1 | tail -50
+            echo "First export failed, retrying..."
+            ./"$GODOT_BIN" --headless --export-release "Android" build/QuackCraft.apk 2>&1 | tail -80
           fi
           ls -la build/
 
