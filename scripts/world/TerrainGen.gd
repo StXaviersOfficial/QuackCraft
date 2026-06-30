@@ -212,7 +212,7 @@ func _decoration(data: PackedByteArray, lx: int, h: int, lz: int, wx: int, wz: i
 			set_voxel(data, lx, h + 1, lz, block)
 	elif biome == Biome.MUSHROOM and r < 0.15:
 		var pick := rng.randf()
-		var block := B.MUSHROOM_RED if pick < 0.5 else B.MUSHROOM_BROWN
+		var block: int = B.MUSHROOM_RED if pick < 0.5 else B.MUSHROOM_BROWN
 		if is_in_bounds(lx, h + 1, lz):
 			set_voxel(data, lx, h + 1, lz, block)
 
@@ -221,7 +221,7 @@ func _place_tree(data: PackedByteArray, lx: int, h: int, lz: int, log: int, leav
 	# Leaves: a small blob around the top
 	var top := h + th
 	for y in range(top - 2, top + 2):
-		var radius := 2 if y < top else 1
+		var radius: int = 2 if y < top else 1
 		for dx in range(-radius, radius + 1):
 			for dz in range(-radius, radius + 1):
 				if dx == 0 and dz == 0 and y < top:

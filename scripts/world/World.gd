@@ -254,17 +254,17 @@ func raycast(origin: Vector3, dir: Vector3, max_dist: float = 6.0) -> Dictionary
 	var x := int(floor(origin.x))
 	var y := int(floor(origin.y))
 	var z := int(floor(origin.z))
-	var stepX := 1 if dir.x > 0 else -1
-	var stepY := 1 if dir.y > 0 else -1
-	var stepZ := 1 if dir.z > 0 else -1
+	var stepX: int = 1 if dir.x > 0 else -1
+	var stepY: int = 1 if dir.y > 0 else -1
+	var stepZ: int = 1 if dir.z > 0 else -1
 
 	# tMax: distance to next voxel boundary
 	var tMaxX := _t_max(origin.x, dir.x)
 	var tMaxY := _t_max(origin.y, dir.y)
 	var tMaxZ := _t_max(origin.z, dir.z)
-	var tDeltaX := abs(1.0 / dir.x) if abs(dir.x) > 1e-9 else 1e9
-	var tDeltaY := abs(1.0 / dir.y) if abs(dir.y) > 1e-9 else 1e9
-	var tDeltaZ := abs(1.0 / dir.z) if abs(dir.z) > 1e-9 else 1e9
+	var tDeltaX: float = abs(1.0 / dir.x) if abs(dir.x) > 1e-9 else 1e9
+	var tDeltaY: float = abs(1.0 / dir.y) if abs(dir.y) > 1e-9 else 1e9
+	var tDeltaZ: float = abs(1.0 / dir.z) if abs(dir.z) > 1e-9 else 1e9
 
 	var normal := Vector3i.ZERO
 	var t := 0.0
@@ -293,10 +293,10 @@ func _t_max(origin: float, dir: float) -> float:
 	if abs(dir) < 1e-9:
 		return 1e9
 	if dir > 0:
-		var next := floor(origin) + 1.0
+		var next: float = floor(origin) + 1.0
 		return (next - origin) / dir
 	else:
-		var prev := floor(origin)
+		var prev: float = floor(origin)
 		return (origin - prev) / -dir
 
 # Find a safe spawn position (top solid block near origin)

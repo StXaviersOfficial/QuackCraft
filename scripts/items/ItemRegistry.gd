@@ -238,7 +238,7 @@ func get_block_drop(block_id: int) -> int:
                 B.SPARK_ORE: return SPARK_POWDER
                 B.STONE: return B.COBBLESTONE
                 B.GRASS: return B.DIRT
-                B.LEAVES, B.OAK_LEAVES, B.BIRCH_LEAVES, B.SPRUCE_LEAVES, B.JUNGLE_LEAVES, B.ACACIA_LEAVES, B.DARK_OAK_LEAVES:
+                B.OAK_LEAVES, B.BIRCH_LEAVES, B.SPRUCE_LEAVES, B.JUNGLE_LEAVES, B.ACACIA_LEAVES, B.DARK_OAK_LEAVES:
                         # Sometimes drops a sapling (simplified: just leaves itself for decoration items)
                         return B.AIR if randf() < 0.9 else B.OAK_SAPLING
                 B.ICE: return B.AIR

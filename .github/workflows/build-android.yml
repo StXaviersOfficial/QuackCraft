@@ -242,6 +242,14 @@ jobs:
           echo "Wrote editor-settings.cfg:"
           cat ~/.config/godot/editor-settings.cfg
 
+      - name: Install Android build template (for Gradle build)
+        run: |
+          # Gradle build requires the Godot Android build template installed in the project.
+          # We do this in-place before exporting.
+          ./"$GODOT_BIN" --headless --import 2>&1 | tail -10
+          ./"$GODOT_BIN" --headless --build-templates-install-android --verbose 2>&1 | tail -20
+          ls -la android/ 2>&1 || echo "No android/ dir created"
+
       - name: Export Android APK
         run: |
           # We're already in the repo root (the working directory of the job).
@@ -251,11 +259,11 @@ jobs:
           # Make sure build/ exists
           mkdir -p build
           # Run export; show all output for debugging
-          ./"$GODOT_BIN" --headless --export-release "Android" build/QuackCraft.apk 2>&1 | tail -80
+          ./"$GODOT_BIN" --headless --export-release "Android" build/QuackCraft.apk 2>&1 | tail -100
           # Retry once if it failed (sometimes the first import is incomplete)
           if [ ! -f build/QuackCraft.apk ]; then
             echo "First export failed, retrying..."
-            ./"$GODOT_BIN" --headless --export-release "Android" build/QuackCraft.apk 2>&1 | tail -80
+            ./"$GODOT_BIN" --headless --export-release "Android" build/QuackCraft.apk 2>&1 | tail -100
           fi
           ls -la build/
 

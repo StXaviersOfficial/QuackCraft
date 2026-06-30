@@ -113,7 +113,7 @@ enum ToolTier { HAND=0, WOOD=1, STONE=2, IRON=3, GOLD=4, GEM=5 }
 enum ToolType { NONE=0, PICKAXE=1, AXE=2, SHOVEL=3, SWORD=4, HOE=5 }
 
 # Block definitions
-var _defs := {}
+static var _defs := {}
 
 const ATLAS_COLS := 16
 const ATLAS_ROWS := 16
@@ -266,28 +266,28 @@ func _t(id: int, name: String, tile: int, opts: Dictionary = {}) -> void:
 func _g(id: int, name: String, top: int, side: int, bottom: int, opts: Dictionary = {}) -> void:
 	_register(id, name, top, side, bottom, opts)
 
-func is_solid(id: int) -> bool:
+static func is_solid(id: int) -> bool:
 	if id == AIR: return false
 	var d = _defs.get(id)
 	return d != null and d.solid
 
-func is_transparent(id: int) -> bool:
+static func is_transparent(id: int) -> bool:
 	if id == AIR: return true
 	var d = _defs.get(id)
 	return d != null and d.transparent
 
-func is_fluid(id: int) -> bool:
+static func is_fluid(id: int) -> bool:
 	var d = _defs.get(id)
 	return d != null and d.fluid
 
-func is_air(id: int) -> bool:
+static func is_air(id: int) -> bool:
 	return id == AIR
 
-func is_cross(id: int) -> bool:
+static func is_cross(id: int) -> bool:
 	var d = _defs.get(id)
 	return d != null and d.render == "cross"
 
-func is_opaque_cube(id: int) -> bool:
+static func is_opaque_cube(id: int) -> bool:
 	if id == AIR: return false
 	var d = _defs.get(id)
 	if d == null: return false
@@ -295,38 +295,38 @@ func is_opaque_cube(id: int) -> bool:
 	if d.render != "cube": return false
 	return true
 
-func get_def(id: int) -> Dictionary:
+static func get_def(id: int) -> Dictionary:
 	return _defs.get(id, {})
 
-func get_block_name(id: int) -> String:
+static func get_block_name(id: int) -> String:
 	var d = _defs.get(id)
 	return d.name if d != null else "unknown"
 
-func get_hardness(id: int) -> float:
+static func get_hardness(id: int) -> float:
 	var d = _defs.get(id)
 	return d.hardness if d != null else 1.0
 
-func get_light(id: int) -> int:
+static func get_light(id: int) -> int:
 	var d = _defs.get(id)
 	return d.light if d != null else 0
 
-func get_render(id: int) -> String:
+static func get_render(id: int) -> String:
 	var d = _defs.get(id)
 	return d.render if d != null else "cube"
 
-func get_tiles(id: int) -> Dictionary:
+static func get_tiles(id: int) -> Dictionary:
 	var d = _defs.get(id)
 	if d == null:
 		return {"top": 0, "side": 0, "bottom": 0}
 	return {"top": d.top, "side": d.side, "bottom": d.bottom}
 
-func get_required_tool(id: int) -> Dictionary:
+static func get_required_tool(id: int) -> Dictionary:
 	var d = _defs.get(id)
 	if d == null:
 		return {"type": ToolType.NONE, "tier": ToolTier.HAND}
 	return {"type": d.tool_type, "tier": d.tool_tier}
 
-func all_ids() -> Array:
+static func all_ids() -> Array:
 	return _defs.keys()
 
 static func tile_to_uv(tile: int) -> Vector2:
