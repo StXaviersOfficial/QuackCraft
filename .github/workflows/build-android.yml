@@ -17,7 +17,7 @@ jobs:
   build:
     name: Build & Publish APK
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 20
 
     steps:
       - name: Checkout repository
@@ -56,9 +56,7 @@ jobs:
       - name: Determine Godot version
         id: godot_version
         run: |
-          # Pin to a specific stable Godot 4.x release that has matching Android templates.
           echo "version=4.4-stable" >> $GITHUB_OUTPUT
-          echo "Using Godot 4.4-stable"
 
       - name: Download Godot editor (headless Linux)
         run: |
@@ -66,10 +64,7 @@ jobs:
           URL="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip"
           echo "Downloading: $URL"
           wget -q "$URL" -O godot.zip
-          ls -la godot.zip
           unzip -q godot.zip
-          ls -la
-          # Find the Godot binary
           GODOT_BIN=$(find . -maxdepth 1 -name "Godot_v*" -type f -executable | head -n1)
           if [ -z "$GODOT_BIN" ]; then
             echo "No Godot binary found after unzip!"
@@ -85,27 +80,18 @@ jobs:
           GODOT_VERSION="${{ steps.godot_version.outputs.version }}"
           URL="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_export_templates.tpz"
           echo "Downloading: $URL"
-          # Use --tries and --timeout for resilience on the large .tpz
           wget --tries=3 --timeout=60 --retry-connrefused -q "$URL" -O templates.tpz
-          ls -la templates.tpz
-          # Sanity check: should be > 200 MB
           SIZE=$(stat -c%s templates.tpz)
           if [ "$SIZE" -lt 100000000 ]; then
-            echo "Templates file too small ($SIZE bytes) — download likely truncated. Retrying..."
+            echo "Templates file too small ($SIZE bytes) — retrying..."
             rm -f templates.tpz
             wget --tries=5 --timeout=120 -q "$URL" -O templates.tpz
-            ls -la templates.tpz
           fi
-          # Godot 4.x expects templates at:
-          #   ~/.local/share/godot/export_templates/<version-dot-stable>/
-          # e.g. ~/.local/share/godot/export_templates/4.4.stable/
-          # The .tpz contains a "templates/" subdir with files like android-release.apk etc.
           TEMPLATES_DIR_NAME=$(echo "$GODOT_VERSION" | sed 's/-stable/.stable/')
           TEMPLATES_DIR=~/.local/share/godot/export_templates/${TEMPLATES_DIR_NAME}
           mkdir -p "$TEMPLATES_DIR"
           cd "$TEMPLATES_DIR"
           unzip -q -o ~/work/QuackCraft/QuackCraft/templates.tpz
-          # The .tpz has a templates/ subdir; move its contents up
           if [ -d "templates" ]; then
             mv -f templates/* .
             rmdir templates 2>/dev/null || true
@@ -113,32 +99,11 @@ jobs:
           echo "Templates installed at: $(pwd)"
           ls -la
 
-      - name: Set up Android SDK & Gradle
-        uses: android-actions/setup-android@v3
-        with:
-          packages: 'platforms;android-34 build-tools;34.0.0 platform-tools'
-          sdk-version: '34'
-
-      - name: Set up Java (for Gradle build)
+      - name: Set up Java (for APK signing)
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
-
-      - name: Verify Android SDK
-        run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-          ls -la $ANDROID_HOME 2>/dev/null || ls -la $ANDROID_SDK_ROOT
-          # Accept all SDK licenses
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
-          # Install required SDK components
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools" > /dev/null 2>&1 || true
-          # Make sure gradle is available
-          gradle --version 2>&1 | head -3 || echo "Gradle not yet installed"
-
-      - name: Create build output directory
-        run: mkdir -p build
 
       - name: Configure debug keystore (if secrets not set)
         id: keystore
@@ -151,12 +116,7 @@ jobs:
           if [ -z "$KS_B64" ]; then
             echo "No keystore secret — using debug keystore."
             echo "use_debug=true" >> $GITHUB_OUTPUT
-            # Generate a Godot-style debug keystore
-            keytool -keytool -genkey -keystore debug.keystore \
-              -storepass android -alias androiddebugkey -keypass android \
-              -keyalg RSA -keysize 2048 -validity 10000 \
-              -dname "CN=Android Debug,O=Android,C=US" 2>&1 || \
-              keytool -genkey -keystore debug.keystore \
+            keytool -genkey -keystore debug.keystore \
               -storepass android -alias androiddebugkey -keypass android \
               -keyalg RSA -keysize 2048 -validity 10000 \
               -dname "CN=Android Debug,O=Android,C=US"
@@ -181,8 +141,7 @@ jobs:
           KEY_ALIAS: ${{ steps.keystore.outputs.key_alias }}
           KEY_PASS: ${{ steps.keystore.outputs.key_pass }}
         run: |
-          # Update the export_presets.cfg with our keystore
-          python3 - <<'EOF'
+          python3 - <<'PYEOF'
           import os
           path = "export_presets.cfg"
           with open(path, "r") as f:
@@ -191,79 +150,30 @@ jobs:
           ks_pass = os.environ["KS_PASS"]
           key_alias = os.environ["KEY_ALIAS"]
           key_pass = os.environ["KEY_PASS"]
-          content = content.replace(
-              'keystore/debug=""',
-              f'keystore/debug="{ks_path}"'
-          )
-          content = content.replace(
-              'keystore/debug_user=""',
-              f'keystore/debug_user="{key_alias}"'
-          )
-          content = content.replace(
-              'keystore/debug_password=""',
-              f'keystore/debug_password="{ks_pass}"'
-          )
-          content = content.replace(
-              'keystore/release=""',
-              f'keystore/release="{ks_path}"'
-          )
-          content = content.replace(
-              'keystore/release_user=""',
-              f'keystore/release_user="{key_alias}"'
-          )
-          content = content.replace(
-              'keystore/release_password=""',
-              f'keystore/release_password="{ks_pass}"'
-          )
-          # Set signed=true
+          content = content.replace('keystore/debug=""', f'keystore/debug="{ks_path}"')
+          content = content.replace('keystore/debug_user=""', f'keystore/debug_user="{key_alias}"')
+          content = content.replace('keystore/debug_password=""', f'keystore/debug_password="{ks_pass}"')
+          content = content.replace('keystore/release=""', f'keystore/release="{ks_path}"')
+          content = content.replace('keystore/release_user=""', f'keystore/release_user="{key_alias}"')
+          content = content.replace('keystore/release_password=""', f'keystore/release_password="{ks_pass}"')
           content = content.replace('package/signed=false', 'package/signed=true')
           with open(path, "w") as f:
               f.write(content)
           print("Patched export_presets.cfg")
-          EOF
-
-      - name: Configure Godot editor settings (Android SDK path)
-        run: |
-          # Godot stores editor settings in ~/.config/godot/editor-settings.cfg on Linux
-          mkdir -p ~/.config/godot
-          cat > ~/.config/godot/editor-settings.cfg <<'EOF'
-          [editor]
-          export/android/android_sdk_path = "$ANDROID_HOME"
-          export/android/debug_keystore = ""
-          export/android/debug_keystore_user = ""
-          export/android/debug_keystore_password = ""
-          export/android/force_system_user = false
-          export/android/shutdown_adb_on_exit = true
-          EOF
-          # Strip leading whitespace from each line (heredoc with <<'EOF' preserves our indentation)
-          sed -i 's/^[[:space:]]*//' ~/.config/godot/editor-settings.cfg
-          # Replace placeholder with actual ANDROID_HOME
-          sed -i "s|\$ANDROID_HOME|$ANDROID_HOME|g" ~/.config/godot/editor-settings.cfg
-          echo "Wrote editor-settings.cfg:"
-          cat ~/.config/godot/editor-settings.cfg
-
-      - name: Install Android build template (for Gradle build)
-        run: |
-          # Gradle build requires the Godot Android build template installed in the project.
-          # We do this in-place before exporting.
-          ./"$GODOT_BIN" --headless --import 2>&1 | tail -10
-          ./"$GODOT_BIN" --headless --build-templates-install-android --verbose 2>&1 | tail -20
-          ls -la android/ 2>&1 || echo "No android/ dir created"
+          PYEOF
 
       - name: Export Android APK
         run: |
-          # We're already in the repo root (the working directory of the job).
           echo "Working directory: $(pwd)"
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          ./"$GODOT_BIN" --headless --import --verbose 2>&1 | tail -30
-          # Make sure build/ exists
+          echo "GODOT_BIN=$GODOT_BIN"
           mkdir -p build
-          # Run export; show all output for debugging
-          ./"$GODOT_BIN" --headless --export-release "Android" build/QuackCraft.apk 2>&1 | tail -100
-          # Retry once if it failed (sometimes the first import is incomplete)
+          # Import project resources first
+          ./"$GODOT_BIN" --headless --import 2>&1 | tail -30
+          # Export the APK
+          ./"$GODOT_BIN" --headless --export-release "Android" build/QuackCraft.apk 2>&1 | tail -60
           if [ ! -f build/QuackCraft.apk ]; then
             echo "First export failed, retrying..."
-            ./"$GODOT_BIN" --headless --export-release "Android" build/QuackCraft.apk 2>&1 | tail -100
+            ./"$GODOT_BIN" --headless --export-release "Android" build/QuackCraft.apk 2>&1 | tail -60
           fi
           ls -la build/
 
@@ -273,17 +183,15 @@ jobs:
             echo "::error::APK was not produced!"
             exit 1
           fi
-          # Verify it's a valid ZIP/APK
-          unzip -l build/QuackCraft.apk | head -10
+          echo "APK size: $(stat -c%s build/QuackCraft.apk) bytes"
+          unzip -l build/QuackCraft.apk | head -15
 
       - name: Compute next version tag
         id: next_tag
         run: |
-          # Fetch latest tag
           git fetch --tags
           LATEST=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
           echo "Latest tag: $LATEST"
-          # Parse vMAJOR.MINOR.PATCH and increment PATCH
           MAJOR=$(echo $LATEST | sed 's/v//' | cut -d. -f1)
           MINOR=$(echo $LATEST | sed 's/v//' | cut -d. -f2)
           PATCH=$(echo $LATEST | sed 's/v//' | cut -d. -f3)
@@ -312,11 +220,10 @@ jobs:
 
             **Install:** Download `QuackCraft.apk` below, allow "Install from unknown sources" on your Android phone, then tap to install.
 
-            **Min Android version:** 5.0 (API 21)
-            **Target Android version:** 14 (API 34)
+            **Min Android version:** 5.0 (API 24)
             **Architectures:** armeabi-v7a, arm64-v8a
 
-            Built with Godot 4.3-stable on ${{ github.event.head_commit.timestamp }}.
+            Built with Godot 4.4-stable.
           files: build/QuackCraft.apk
           draft: false
           prerelease: false

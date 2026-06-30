@@ -60,7 +60,7 @@ func _ready() -> void:
 
 func _build_ui() -> void:
 	# Full-screen touch surface
-	var root := Control.new()
+	var root: Control = Control.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
@@ -120,10 +120,10 @@ func _build_ui() -> void:
 	hotbar_container.add_theme_constant_override("separation", 4)
 	root.add_child(hotbar_container)
 	for i in range(HOTBAR_SLOT_COUNT):
-		var slot := Panel.new()
+		var slot: Panel = Panel.new()
 		slot.custom_minimum_size = Vector2(56, 56)
 		slot.add_theme_stylebox_override("panel", _slot_style(Color(0, 0, 0, 0.55), 2, Color(1, 1, 1, 0.4)))
-		var label := Label.new()
+		var label: Label = Label.new()
 		label.text = str(i + 1)
 		label.position = Vector2(3, 1)
 		label.add_theme_color_override("font_color", Color(1, 1, 1, 0.6))
@@ -135,7 +135,7 @@ func _build_ui() -> void:
 		icon.set_anchors_preset(Control.PRESET_FULL_RECT)
 		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		slot.add_child(icon)
-		var count := Label.new()
+		var count: Label = Label.new()
 		count.name = "Count"
 		count.position = Vector2(35, 35)
 		count.add_theme_color_override("font_color", Color.WHITE)
@@ -203,7 +203,7 @@ func _build_ui() -> void:
 	root.add_child(down_button)
 
 func _circle_style(c: Color) -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
+	var s: StyleBoxFlat = StyleBoxFlat.new()
 	s.bg_color = c
 	s.corner_radius_top_left = 90
 	s.corner_radius_top_right = 90
@@ -217,7 +217,7 @@ func _circle_style(c: Color) -> StyleBoxFlat:
 	return s
 
 func _slot_style(bg: Color, border_w: int, border_c: Color) -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
+	var s: StyleBoxFlat = StyleBoxFlat.new()
 	s.bg_color = bg
 	s.border_width_left = border_w
 	s.border_width_top = border_w
@@ -265,7 +265,7 @@ func refresh_hotbar() -> void:
 func _color_for_item(id: int) -> Color:
 	# Simple color hash for icon — gives a quick visual cue
 	const B = preload("res://scripts/blocks/BlockRegistry.gd")
-	var def := B.get_def(id)
+	var def: Dictionary = B.get_def(id)
 	if def.size() > 0:
 		match id:
 			B.GRASS: return Color(0.5, 0.7, 0.3)
@@ -286,7 +286,7 @@ func _color_for_item(id: int) -> Color:
 			B.COAL_ORE: return Color(0.15, 0.15, 0.15)
 			_: return Color(0.7, 0.7, 0.7)
 	# Items — derive from name hash
-	var name := ItemRegistry.get_item_name(id)
+	var name: String = ItemRegistry.get_item_name(id)
 	return Color.from_hsv(abs(name.hash()) % 100 / 100.0, 0.5, 0.7)
 
 func _on_jump_down() -> void:
@@ -297,7 +297,7 @@ func _on_jump_up() -> void:
 
 func _on_inventory_pressed() -> void:
 	# Open inventory overlay
-	var inv := get_tree().current_scene.get_node_or_null("InventoryUI")
+	var inv: Node = get_tree().current_scene.get_node_or_null("InventoryUI")
 	if inv == null:
 		return
 	inv.toggle()
@@ -378,7 +378,7 @@ func _is_in_joystick(pos: Vector2) -> bool:
 	return pos.distance_to(center) <= joystick_base.size.x * 0.5 + 30
 
 func _is_in_look_area(pos: Vector2) -> bool:
-	var vr := get_viewport().get_visible_rect().size
+	var vr: Vector2 = get_viewport().get_visible_rect().size
 	return pos.x > vr.x * 0.45
 
 func _joystick_update(touch_pos: Vector2) -> void:

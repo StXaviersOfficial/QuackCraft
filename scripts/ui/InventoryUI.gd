@@ -25,21 +25,21 @@ func setup(p: Node) -> void:
 
 func _build_ui() -> void:
 	# Background panel
-	var bg := Panel.new()
+	var bg: Panel = Panel.new()
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	bg.add_theme_stylebox_override("panel", _bg_style())
 	add_child(bg)
 
 	# Main container centered
-	var center := CenterContainer.new()
+	var center: CenterContainer = CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
 
-	var vbox := VBoxContainer.new()
+	var vbox: VBoxContainer = VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 12)
 	center.add_child(vbox)
 
-	var title := Label.new()
+	var title: Label = Label.new()
 	title.text = "Inventory"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font", 22)
@@ -47,28 +47,28 @@ func _build_ui() -> void:
 	vbox.add_child(title)
 
 	# Crafting grid
-	var craft_row := HBoxContainer.new()
+	var craft_row: HBoxContainer = HBoxContainer.new()
 	craft_row.add_theme_constant_override("separation", 18)
 	vbox.add_child(craft_row)
 	craft_row.alignment = BoxContainer.ALIGNMENT_CENTER
 
 	# 2x2 or 3x3 grid
-	var grid_holder := VBoxContainer.new()
+	var grid_holder: VBoxContainer = VBoxContainer.new()
 	craft_row.add_child(grid_holder)
-	var grid := GridContainer.new()
+	var grid: GridContainer = GridContainer.new()
 	grid.columns = 3
 	grid.add_theme_constant_override("h_separation", 4)
 	grid.add_theme_constant_override("v_separation", 4)
 	grid_holder.add_child(grid)
 	for i in range(9):
-		var slot := _make_slot("3x3_%d" % i)
+		var slot: Panel = _make_slot("3x3_%d" % i)
 		grid.add_child(slot)
 		grid_3x3.append(slot)
 	# Hide 3x3 unless crafting table is open
 	_show_3x3(false)
 
 	# Arrow + output
-	var arrow := Label.new()
+	var arrow: Label = Label.new()
 	arrow.text = "->"
 	arrow.add_theme_font_size_override("font", 26)
 	arrow.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -78,7 +78,7 @@ func _build_ui() -> void:
 	craft_row.add_child(output_slot)
 
 	# Main inventory (3 rows of 9)
-	var inv_grid := GridContainer.new()
+	var inv_grid: GridContainer = GridContainer.new()
 	inv_grid.columns = 9
 	inv_grid.add_theme_constant_override("h_separation", 4)
 	inv_grid.add_theme_constant_override("v_separation", 4)
@@ -89,7 +89,7 @@ func _build_ui() -> void:
 		inv_slots.append(slot)
 
 	# Hotbar row
-	var hotbar_grid := GridContainer.new()
+	var hotbar_grid: GridContainer = GridContainer.new()
 	hotbar_grid.columns = 9
 	hotbar_grid.add_theme_constant_override("h_separation", 4)
 	hotbar_grid.add_theme_constant_override("v_separation", 4)
@@ -99,7 +99,7 @@ func _build_ui() -> void:
 		hotbar_grid.add_child(slot)
 
 	# Close button
-	var close_btn := Button.new()
+	var close_btn: Button = Button.new()
 	close_btn.text = "Close (E)"
 	close_btn.pressed.connect(toggle)
 	vbox.add_child(close_btn)
@@ -136,12 +136,12 @@ func _make_slot(name: String) -> Panel:
 	return slot
 
 func _bg_style() -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
+	var s: StyleBoxFlat = StyleBoxFlat.new()
 	s.bg_color = Color(0, 0, 0, 0.7)
 	return s
 
 func _slot_style() -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
+	var s: StyleBoxFlat = StyleBoxFlat.new()
 	s.bg_color = Color(0.15, 0.15, 0.18, 0.9)
 	s.border_width_left = 2
 	s.border_width_top = 2
@@ -163,10 +163,10 @@ func toggle() -> void:
 
 func _is_near_crafting_table() -> bool:
 	if player == null: return false
-	var p := player.position
-	var bx := int(p.x)
-	var by := int(p.y)
-	var bz := int(p.z)
+	var p: Vector3 = player.position
+	var bx: int = int(p.x)
+	var by: int = int(p.y)
+	var bz: int = int(p.z)
 	for dx in range(-2, 3):
 		for dy in range(-2, 3):
 			for dz in range(-2, 3):

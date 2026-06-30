@@ -122,8 +122,8 @@ func build_mesh(world: Node, chunk: Node) -> Dictionary:
 						var tile: int = def.side
 						if face.dir.y > 0: tile = def.top
 						elif face.dir.y < 0: tile = def.bottom
-						var uv_origin := B.tile_to_uv(tile)
-						var uv_sz := B.tile_size_uv()
+						var uv_origin: Vector2 = B.tile_to_uv(tile)
+						var uv_sz: Vector2 = B.tile_size_uv()
 						# Append quad
 						var target_verts
 						var target_uvs
@@ -151,8 +151,8 @@ func build_mesh(world: Node, chunk: Node) -> Dictionary:
 				elif render == "cross":
 					# Billboard cross (flowers, grass, etc.)
 					var tile: int = def.side
-					var uv_origin := B.tile_to_uv(tile)
-					var uv_sz := B.tile_size_uv()
+					var uv_origin: Vector2 = B.tile_to_uv(tile)
+					var uv_sz: Vector2 = B.tile_size_uv()
 					_add_cross(cross_verts, cross_uvs, cross_normals, cross_indices, cross_colors,
 						Vector3(x, y, z), uv_origin, uv_sz)
 				elif render == "fluid":
@@ -168,8 +168,8 @@ func build_mesh(world: Node, chunk: Node) -> Dictionary:
 						if nblock == id:
 							continue
 						var tile: int = def.side
-						var uv_origin := B.tile_to_uv(tile)
-						var uv_sz := B.tile_size_uv()
+						var uv_origin: Vector2 = B.tile_to_uv(tile)
+						var uv_sz: Vector2 = B.tile_size_uv()
 						_add_quad(opaque_verts, opaque_uvs, opaque_normals, opaque_indices, opaque_colors,
 							Vector3(x, y, z), face, uv_origin, uv_sz, Color(1, 1, 1, 0.8))
 
@@ -206,7 +206,7 @@ func build_mesh(world: Node, chunk: Node) -> Dictionary:
 		arr_mesh.surface_set_material(arr_mesh.get_surface_count(), material)
 
 	# Build collision shape from opaque cube faces
-	var shape := ConcavePolygonShape3D.new()
+	var shape: ConcavePolygonShape3D = ConcavePolygonShape3D.new()
 	if collision_faces.size() > 0:
 		shape.set_faces(collision_faces)
 
@@ -222,7 +222,7 @@ func _get_block_or_neighbor(world: Node, chunk: Node, x: int, y: int, z: int) ->
 	return world.get_block(wx, y, wz)
 
 func _add_quad(verts, uvs, normals, indices, colors, origin: Vector3, face: Dictionary, uv_origin: Vector2, uv_sz: Vector2, color: Color) -> void:
-	var start := verts.size()
+	var start: int = verts.size()
 	for i in range(4):
 		verts.append(origin + face.corners[i])
 		normals.append(face.normal)
@@ -248,7 +248,7 @@ func _add_cross(verts, uvs, normals, indices, colors, origin: Vector3, uv_origin
 		Vector3(0.15, 1, 0.85), Vector3(0.15, 0, 0.85)
 	]
 	# Quad 1 (+normal)
-	var start := verts.size()
+	var start: int = verts.size()
 	for i in range(4):
 		verts.append(origin + p1[i])
 		normals.append(Vector3(0.7, 0, 0.7))

@@ -10,7 +10,7 @@ var _master_muted: bool = false
 
 func _ready() -> void:
 	for i in range(POOL_SIZE):
-		var p := AudioStreamPlayer.new()
+		var p: AudioStreamPlayer = AudioStreamPlayer.new()
 		p.bus = "Master"
 		add_child(p)
 		_pool.append(p)
@@ -18,15 +18,15 @@ func _ready() -> void:
 
 func _preload_sounds() -> void:
 	# Try to load each .wav from res://assets/sounds/
-	var dir := DirAccess.open("res://assets/sounds")
+	var dir: DirAccess = DirAccess.open("res://assets/sounds")
 	if dir == null:
 		return
 	dir.list_dir_begin()
-	var name := dir.get_next()
+	var name: String = dir.get_next()
 	while name != "":
 		if name.ends_with(".wav") or name.ends_with(".ogg"):
-			var key := name.get_basename()
-			var stream := load("res://assets/sounds/%s" % name)
+			var key: String = name.get_basename()
+			var stream: Resource = load("res://assets/sounds/%s" % name)
 			if stream != null:
 				_sounds[key] = stream
 		name = dir.get_next()
@@ -36,7 +36,7 @@ func play(name: String, volume: float = 0.0, pitch: float = 1.0) -> void:
 	if _master_muted: return
 	if not _sounds.has(name):
 		return
-	var p := _pool[_pool_idx]
+	var p: AudioStreamPlayer = _pool[_pool_idx]
 	_pool_idx = (_pool_idx + 1) % POOL_SIZE
 	p.stream = _sounds[name]
 	p.volume_db = volume
@@ -63,6 +63,6 @@ func play_footstep(block_id: int) -> void:
 
 func set_muted(m: bool) -> void:
 	_master_muted = m
-	var master := AudioServer.get_bus_index("Master")
+	var master: int = AudioServer.get_bus_index("Master")
 	if master >= 0:
 		AudioServer.set_bus_mute(master, m)

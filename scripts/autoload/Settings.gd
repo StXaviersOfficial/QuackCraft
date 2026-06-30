@@ -25,12 +25,12 @@ func _apply_fps() -> void:
 	Engine.max_fps = fps_cap
 
 func _apply_volume() -> void:
-	var idx := AudioServer.get_bus_index("Master")
+	var idx: int = AudioServer.get_bus_index("Master")
 	if idx >= 0:
 		AudioServer.set_bus_volume_db(idx, linear_to_db(sound_volume))
 
 func _save() -> void:
-	var cfg := ConfigFile.new()
+	var cfg: ConfigFile = ConfigFile.new()
 	cfg.set_value("graphics", "render_distance", render_distance)
 	cfg.set_value("graphics", "particle_density", particle_density)
 	cfg.set_value("graphics", "fps_cap", fps_cap)
@@ -40,7 +40,7 @@ func _save() -> void:
 	cfg.save(SETTINGS_PATH)
 
 func _load() -> void:
-	var cfg := ConfigFile.new()
+	var cfg: ConfigFile = ConfigFile.new()
 	if cfg.load(SETTINGS_PATH) != OK:
 		return
 	render_distance = cfg.get_value("graphics", "render_distance", 5)

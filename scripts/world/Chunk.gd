@@ -55,13 +55,13 @@ func set_voxel_local(x: int, y: int, z: int, v: int) -> void:
 	dirty = true
 
 func get_voxel_world(wx: int, wy: int, wz: int) -> int:
-	var lx := wx - cx * CHUNK_X
-	var lz := wz - cz * CHUNK_Z
+	var lx: int = wx - cx * CHUNK_X
+	var lz: int = wz - cz * CHUNK_Z
 	return get_voxel_local(lx, wy, lz)
 
 func set_voxel_world(wx: int, wy: int, wz: int, v: int) -> bool:
-	var lx := wx - cx * CHUNK_X
-	var lz := wz - cz * CHUNK_Z
+	var lx: int = wx - cx * CHUNK_X
+	var lz: int = wz - cz * CHUNK_Z
 	if lx < 0 or lx >= CHUNK_X or lz < 0 or lz >= CHUNK_Z:
 		return false
 	if wy < 0 or wy >= CHUNK_Y:

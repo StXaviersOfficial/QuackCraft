@@ -53,8 +53,8 @@ func _init(seed_val: int = 1337) -> void:
 
 # Returns biome id at world XZ
 func get_biome(wx: int, wz: int) -> int:
-	var t := _noise_temp.get_noise_2d(wx, wz) # -1..1
-	var m := _noise_moisture.get_noise_2d(wx, wz) # -1..1
+	var t: float = _noise_temp.get_noise_2d(wx, wz) # -1..1
+	var m: float = _noise_moisture.get_noise_2d(wx, wz) # -1..1
 	# Temperature bands
 	if t < -0.4:
 		return Biome.SNOWY
@@ -68,7 +68,7 @@ func get_biome(wx: int, wz: int) -> int:
 
 # Returns surface height (top solid block Y) at world XZ
 func get_height(wx: int, wz: int) -> int:
-	var base := _noise_height.get_noise_2d(wx, wz) # -1..1
+	var base: float = _noise_height.get_noise_2d(wx, wz) # -1..1
 	var h := int(SEA_LEVEL + 8 + base * 18.0)
 	return clamp(h, 8, CHUNK_Y - 8)
 
@@ -79,15 +79,15 @@ func generate_chunk(cx: int, cz: int) -> PackedByteArray:
 	data.resize(CHUNK_X * CHUNK_Y * CHUNK_Z)
 	data.fill(0) # AIR
 
-	var base_x := cx * CHUNK_X
-	var base_z := cz * CHUNK_Z
+	var base_x: int = cx * CHUNK_X
+	var base_z: int = cz * CHUNK_Z
 
 	for lx in range(CHUNK_X):
 		for lz in range(CHUNK_Z):
-			var wx := base_x + lx
-			var wz := base_z + lz
-			var biome := get_biome(wx, wz)
-			var h := get_height(wx, wz)
+			var wx: int = base_x + lx
+			var wz: int = base_z + lz
+			var biome: int = get_biome(wx, wz)
+			var h: int = get_height(wx, wz)
 			# Bedrock floor
 			set_voxel(data, lx, 0, lz, B.BEDROCK)
 			# Stone layer down to h-4
@@ -96,7 +96,7 @@ func generate_chunk(cx: int, cz: int) -> PackedByteArray:
 				if _is_cave(wx, y, wz):
 					continue
 				# Maybe place ore
-				var ore := _get_ore_at(wx, y, wz)
+				var ore: int = _get_ore_at(wx, y, wz)
 				if ore != B.AIR:
 					set_voxel(data, lx, y, lz, ore)
 				else:
@@ -137,14 +137,14 @@ func generate_chunk(cx: int, cz: int) -> PackedByteArray:
 func _is_cave(wx: int, y: int, wz: int) -> bool:
 	if y < 4 or y > 70:
 		return false
-	var n := _noise_cave.get_noise_3d(wx, y * 1.2, wz)
+	var n: float = _noise_cave.get_noise_3d(wx, y * 1.2, wz)
 	# Carve where noise > threshold (creates 3D tunnels)
 	return n > 0.55
 
 func _get_ore_at(wx: int, y: int, wz: int) -> int:
 	# Depth-based ore distribution
 	if y < 1: return B.AIR
-	var n := _noise_ore.get_noise_3d(wx, y, wz)
+	var n: float = _noise_ore.get_noise_3d(wx, y, wz)
 	# Higher noise threshold = rarer
 	if y < 16 and n > 0.85:
 		return B.GEM_ORE
@@ -164,9 +164,9 @@ func _get_ore_at(wx: int, y: int, wz: int) -> int:
 
 func _decoration(data: PackedByteArray, lx: int, h: int, lz: int, wx: int, wz: int, biome: int) -> void:
 	# Use a deterministic hash from wx,wz for placement
-	var rng := RandomNumberGenerator.new()
+	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 	rng.seed = hash(Vector2i(wx, wz)) & 0x7FFFFFFF
-	var r := rng.randf()
+	var r: float = rng.randf()
 	# Trees in forest/plains
 	if biome == Biome.FOREST and r < 0.06:
 		_place_tree(data, lx, h, lz, B.OAK_LOG, B.OAK_LEAVES, rng)
@@ -178,7 +178,7 @@ func _decoration(data: PackedByteArray, lx: int, h: int, lz: int, wx: int, wz: i
 		_place_tree(data, lx, h, lz, B.SPRUCE_LOG, B.SPRUCE_LEAVES, rng)
 	elif biome == Biome.DESERT and r < 0.04:
 		# Cactus
-		var ch := rng.randi_range(1, 3)
+		var ch: int = rng.randi_range(1, 3)
 		for i in range(ch):
 			if is_in_bounds(lx, h + 1 + i, lz):
 				set_voxel(data, lx, h + 1 + i, lz, B.CACTUS)
@@ -190,7 +190,7 @@ func _decoration(data: PackedByteArray, lx: int, h: int, lz: int, wx: int, wz: i
 				set_voxel(data, lx, h + 2, lz, B.REED)
 	elif r < 0.12:
 		# Tall grass / flowers
-		var pick := rng.randf()
+		var pick: float = rng.randf()
 		var block := B.TALL_GRASS
 		if biome == Biome.SNOWY:
 			return
@@ -211,13 +211,13 @@ func _decoration(data: PackedByteArray, lx: int, h: int, lz: int, wx: int, wz: i
 		if is_in_bounds(lx, h + 1, lz):
 			set_voxel(data, lx, h + 1, lz, block)
 	elif biome == Biome.MUSHROOM and r < 0.15:
-		var pick := rng.randf()
+		var pick: float = rng.randf()
 		var block: int = B.MUSHROOM_RED if pick < 0.5 else B.MUSHROOM_BROWN
 		if is_in_bounds(lx, h + 1, lz):
 			set_voxel(data, lx, h + 1, lz, block)
 
 func _place_tree(data: PackedByteArray, lx: int, h: int, lz: int, log: int, leaves: int, rng: RandomNumberGenerator) -> void:
-	var th := rng.randi_range(4, 6)
+	var th: int = rng.randi_range(4, 6)
 	# Leaves: a small blob around the top
 	var top := h + th
 	for y in range(top - 2, top + 2):

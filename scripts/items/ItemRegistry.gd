@@ -219,11 +219,11 @@ func get_item(id: int) -> Dictionary:
         return {}
 
 func get_item_name(id: int) -> String:
-        var d := get_item(id)
+        var d: Dictionary = get_item(id)
         return d.get("name", "unknown")
 
 func is_food(id: int) -> bool:
-        var d := get_item(id)
+        var d: Dictionary = get_item(id)
         return d.get("food", 0) > 0
 
 # Block drops: by default a block drops itself; ores drop their mineral.

@@ -104,18 +104,18 @@ func _physics_process(delta: float) -> void:
         if not is_on_floor():
                 velocity.y -= gravity * delta
         # Movement
-        var speed := walk_speed
+        var speed: float = walk_speed
         if Input.is_action_pressed("sprint") or _is_sprinting_mobile():
                 speed = sprint_speed
-        var forward := Vector3(sin(deg_to_rad(yaw)), 0, cos(deg_to_rad(yaw)))
-        var right := Vector3(forward.z, 0, -forward.x)
+        var forward: Vector3 = Vector3(sin(deg_to_rad(yaw)), 0, cos(deg_to_rad(yaw)))
+        var right: Vector3 = Vector3(forward.z, 0, -forward.x)
         # Combine keyboard + mobile joystick
-        var input_vec := Vector2.ZERO
+        var input_vec: Vector2 = Vector2.ZERO
         input_vec.y += Input.get_action_strength("move_forward") - Input.get_action_strength("move_backward")
         input_vec.x += Input.get_action_strength("move_right") - Input.get_action_strength("move_left")
         input_vec += move_vector
         input_vec = input_vec.clampf(-1.0, 1.0)
-        var move_dir := forward * input_vec.y + right * input_vec.x
+        var move_dir: Vector3 = forward * input_vec.y + right * input_vec.x
         move_dir = move_dir.normalized() * min(move_dir.length(), 1.0)
         velocity.x = move_dir.x * speed
         velocity.z = move_dir.z * speed
@@ -176,8 +176,8 @@ func look_around(delta_pitch: float, delta_yaw: float) -> void:
 func _process(_delta: float) -> void:
         # Update targeted block via raycast from camera center
         if camera != null and world != null:
-                var origin := camera.global_position
-                var dir := -camera.global_transform.basis.z.normalized()
+                var origin: Vector3 = camera.global_position
+                var dir: Vector3 = -camera.global_transform.basis.z.normalized()
                 var hit: Dictionary = world.raycast(origin, dir, reach)
                 targeted_block = hit
 
@@ -201,7 +201,7 @@ func _update_mining(delta: float) -> void:
                 return
         var hardness: float = B.get_hardness(id)
         # Determine mining speed based on tool (current hotbar item)
-        var speed_mult := 1.0
+        var speed_mult: float = 1.0
         if hotbar[hotbar_index] != null:
                 speed_mult = _tool_mining_speed(hotbar[hotbar_index].id, id)
         mining_progress += delta * speed_mult / hardness
@@ -216,9 +216,9 @@ func _update_mining(delta: float) -> void:
 
 func _tool_mining_speed(item_id: int, block_id: int) -> float:
         # If item is a tool and block requires it, multiply speed based on tier
-        var req := B.get_required_tool(block_id)
+        var req: Dictionary = B.get_required_tool(block_id)
         # Check ItemRegistry for tool type/tier of item_id
-        var item := ItemRegistry.get_item(item_id)
+        var item: Dictionary = ItemRegistry.get_item(item_id)
         if item == null or not item.has("tool_type"):
                 return 1.0 if req.type == B.ToolType.NONE else 0.3
         var tool_type: int = item.get("tool_type", B.ToolType.NONE)
@@ -270,8 +270,8 @@ func try_place_block() -> bool:
         # Place adjacent to hit face
         var pos: Vector3i = targeted_block.pos + targeted_block.normal
         # Don't place inside player's body
-        var player_pos := Vector3(position)
-        var block_pos := Vector3(pos.x + 0.5, pos.y + 0.5, pos.z + 0.5)
+        var player_pos: Vector3 = Vector3(position)
+        var block_pos: Vector3 = Vector3(pos.x + 0.5, pos.y + 0.5, pos.z + 0.5)
         if block_pos.distance_to(player_pos) < 1.0:
                 return false
         world.set_block(pos.x, pos.y, pos.z, id)
@@ -320,7 +320,7 @@ func select_hotbar(idx: int) -> void:
         hotbar_changed.emit(idx)
 
 func scroll_hotbar(dir: int) -> void:
-        var idx := (hotbar_index + dir) % hotbar.size()
+        var idx: int = (hotbar_index + dir) % hotbar.size()
         if idx < 0: idx += hotbar.size()
         select_hotbar(idx)
 
@@ -339,9 +339,9 @@ func get_hotbar_item(idx: int) -> Variant:
 
 func _play_footstep() -> void:
         # Pick sound based on surface block under player
-        var bx := int(position.x)
-        var bz := int(position.z)
-        var by := int(position.y - 0.1)
+        var bx: int = int(position.x)
+        var bz: int = int(position.z)
+        var by: int = int(position.y - 0.1)
         var block: int = world.get_block(bx, by, bz)
         AudioMgr.play_footstep(block)
 

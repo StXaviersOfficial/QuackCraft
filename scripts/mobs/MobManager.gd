@@ -47,10 +47,10 @@ func _try_spawn() -> void:
         if day_night != null:
                 is_night = not day_night.is_daytime()
         # Pick a spawn position around the player
-        var angle := randf() * TAU
-        var dist := SPAWN_DISTANCE + randf() * 8.0
-        var sx := int(player.position.x + cos(angle) * dist)
-        var sz := int(player.position.z + sin(angle) * dist)
+        var angle: float = randf() * TAU
+        var dist: float = SPAWN_DISTANCE + randf() * 8.0
+        var sx: int = int(player.position.x + cos(angle) * dist)
+        var sz: int = int(player.position.z + sin(angle) * dist)
         # Find surface Y
         var sy := -1
         for y in range(80, 1, -1):
@@ -60,20 +60,20 @@ func _try_spawn() -> void:
                         break
         if sy < 0: return
         # Check light (simplified: spawn only at night for hostiles, anytime for passives)
-        var type := _pick_type(is_night)
+        var type: String = _pick_type(is_night)
         if type == "": return
         _spawn_mob(type, Vector3(sx + 0.5, sy + 0.5, sz + 0.5))
 
 func _pick_type(night: bool) -> String:
         if night:
-                var r := randf()
+                var r: float = randf()
                 if r < 0.4: return "shambler"
                 if r < 0.65: return "bonewalker"
                 if r < 0.85: return "crawler"
                 if r < 0.95: return "shade"
                 return "bomber"
         else:
-                var r := randf()
+                var r: float = randf()
                 if r < 0.3: return "cow"
                 if r < 0.55: return "pig"
                 if r < 0.75: return "chicken"
@@ -81,7 +81,7 @@ func _pick_type(night: bool) -> String:
                 return "rabbit"
 
 func _spawn_mob(type: String, pos: Vector3) -> Node:
-        var m := MobSceneScript.new()
+        var m: Node3D = MobSceneScript.new()
         m.mob_type = type
         m.position = pos
         world.add_child(m)

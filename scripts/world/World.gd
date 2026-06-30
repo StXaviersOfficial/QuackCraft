@@ -83,7 +83,7 @@ func set_player(p: Node3D) -> void:
 func _process(_delta: float) -> void:
 	if player == null:
 		return
-	var ppos := player.position
+	var ppos: Vector3 = player.position
 	var pcx := int(ppos.x) / CHUNK_X
 	var pcz := int(ppos.z) / CHUNK_Z
 	if pcx != last_pcx or pcz != last_pcz:
@@ -101,7 +101,7 @@ func _process(_delta: float) -> void:
 
 func _update_streaming(pcx: int, pcz: int) -> void:
 	# Request new chunks in render distance
-	var rd := render_distance
+	var rd: int = render_distance
 	for dz in range(-rd, rd + 1):
 		for dx in range(-rd, rd + 1):
 			if dx * dx + dz * dz > (rd + 0.5) * (rd + 0.5):
@@ -111,10 +111,10 @@ func _update_streaming(pcx: int, pcz: int) -> void:
 				_create_chunk(key.x, key.y)
 
 	# Mark distant chunks for unload
-	var to_remove := []
+	var to_remove: Array = []
 	for key in chunks.keys():
-		var dx := key.x - pcx
-		var dz := key.y - pcz
+		var dx: int = key.x - pcx
+		var dz: int = key.y - pcz
 		if dx * dx + dz * dz > (rd + 2) * (rd + 2):
 			to_remove.append(key)
 	for key in to_remove:
@@ -124,7 +124,7 @@ func _update_streaming(pcx: int, pcz: int) -> void:
 		chunk_unloaded.emit(key.x, key.y)
 
 func _create_chunk(p_cx: int, p_cz: int) -> Node:
-	var c := ChunkClass.new()
+	var c: Node = ChunkClass.new()
 	c.initialize(p_cx, p_cz, self)
 	add_child(c)
 	chunks[Vector2i(p_cx, p_cz)] = c
@@ -138,8 +138,8 @@ func _create_chunk(p_cx: int, p_cz: int) -> Node:
 
 func _apply_modifications(c: Node) -> void:
 	# Apply any saved block edits for this chunk
-	var base_x := c.cx * CHUNK_X
-	var base_z := c.cz * CHUNK_Z
+	var base_x: int = c.cx * CHUNK_X
+	var base_z: int = c.cz * CHUNK_Z
 	for x in range(CHUNK_X):
 		for z in range(CHUNK_Z):
 			for y in range(CHUNK_Y):
@@ -161,9 +161,9 @@ func _generation_thread_main() -> void:
 func _mesh_chunk(c: Node) -> void:
 	if c == null or not is_instance_valid(c):
 		return
-	var mesher := ChunkMesher.new()
+	var mesher: RefCounted = ChunkMesher.new()
 	mesher.material = atlas_material
-	var mesh_data := mesher.build_mesh(self, c)
+	var mesh_data: Dictionary = mesher.build_mesh(self, c)
 	c.mesh_instance.mesh = mesh_data.mesh
 	# Update collision shape
 	if mesh_data.shape != null:
@@ -179,8 +179,8 @@ func collision_update(c: Node, shape: ConcavePolygonShape3D) -> void:
 # Public API: get/set block by world coords
 func get_block(wx: int, wy: int, wz: int) -> int:
 	if wy < 0 or wy >= CHUNK_Y: return B.AIR
-	var pcx := wx / CHUNK_X
-	var pcz := wz / CHUNK_Z
+	var pcx: int = wx / CHUNK_X
+	var pcz: int = wz / CHUNK_Z
 	# Python-style floor division for negatives
 	if wx < 0: pcx = (wx - CHUNK_X + 1) / CHUNK_X
 	if wz < 0: pcz = (wz - CHUNK_Z + 1) / CHUNK_Z
@@ -191,8 +191,8 @@ func get_block(wx: int, wy: int, wz: int) -> int:
 
 func set_block(wx: int, wy: int, wz: int, id: int, persist: bool = true) -> void:
 	if wy < 0 or wy >= CHUNK_Y: return
-	var pcx := wx / CHUNK_X
-	var pcz := wz / CHUNK_Z
+	var pcx: int = wx / CHUNK_X
+	var pcz: int = wz / CHUNK_Z
 	if wx < 0: pcx = (wx - CHUNK_X + 1) / CHUNK_X
 	if wz < 0: pcz = (wz - CHUNK_Z + 1) / CHUNK_Z
 	var key := Vector2i(pcx, pcz)
@@ -204,8 +204,8 @@ func set_block(wx: int, wy: int, wz: int, id: int, persist: bool = true) -> void
 	c.dirty = true
 	chunks_to_mesh.append(c)
 	# Mark neighbors dirty if on border
-	var lx := wx - pcx * CHUNK_X
-	var lz := wz - pcz * CHUNK_Z
+	var lx: int = wx - pcx * CHUNK_X
+	var lz: int = wz - pcz * CHUNK_Z
 	if lx == 0:
 		_mark_neighbor_dirty(pcx - 1, pcz)
 	if lx == CHUNK_X - 1:
@@ -230,7 +230,7 @@ func _mark_neighbor_dirty(p_cx: int, p_cz: int) -> void:
 
 # Save / Load
 func _save_modifications() -> void:
-	var f := FileAccess.open(save_path, FileAccess.WRITE)
+	var f: FileAccess = FileAccess.open(save_path, FileAccess.WRITE)
 	if f == null:
 		return
 	f.store_var(modifications)
@@ -239,7 +239,7 @@ func _save_modifications() -> void:
 func _load_modifications() -> void:
 	if not FileAccess.file_exists(save_path):
 		return
-	var f := FileAccess.open(save_path, FileAccess.READ)
+	var f: FileAccess = FileAccess.open(save_path, FileAccess.READ)
 	if f == null:
 		return
 	modifications = f.get_var()
@@ -259,9 +259,9 @@ func raycast(origin: Vector3, dir: Vector3, max_dist: float = 6.0) -> Dictionary
 	var stepZ: int = 1 if dir.z > 0 else -1
 
 	# tMax: distance to next voxel boundary
-	var tMaxX := _t_max(origin.x, dir.x)
-	var tMaxY := _t_max(origin.y, dir.y)
-	var tMaxZ := _t_max(origin.z, dir.z)
+	var tMaxX: float = _t_max(origin.x, dir.x)
+	var tMaxY: float = _t_max(origin.y, dir.y)
+	var tMaxZ: float = _t_max(origin.z, dir.z)
 	var tDeltaX: float = abs(1.0 / dir.x) if abs(dir.x) > 1e-9 else 1e9
 	var tDeltaY: float = abs(1.0 / dir.y) if abs(dir.y) > 1e-9 else 1e9
 	var tDeltaZ: float = abs(1.0 / dir.z) if abs(dir.z) > 1e-9 else 1e9
@@ -269,7 +269,7 @@ func raycast(origin: Vector3, dir: Vector3, max_dist: float = 6.0) -> Dictionary
 	var normal := Vector3i.ZERO
 	var t := 0.0
 	while t < max_dist:
-		var block := get_block(x, y, z)
+		var block: int = get_block(x, y, z)
 		if block != B.AIR and not B.is_fluid(block):
 			return {"hit": true, "pos": Vector3i(x, y, z), "normal": normal, "block": block}
 		if tMaxX < tMaxY and tMaxX < tMaxZ:
@@ -302,21 +302,21 @@ func _t_max(origin: float, dir: float) -> float:
 # Find a safe spawn position (top solid block near origin)
 func find_spawn() -> Vector3:
 	for attempt in range(20):
-		var wx := (randi() % 32) - 16
-		var wz := (randi() % 32) - 16
-		var h := terrain.get_height(wx, wz)
+		var wx: int = (randi() % 32) - 16
+		var wz: int = (randi() % 32) - 16
+		var h: int = terrain.get_height(wx, wz)
 		if h > 0:
 			# Make sure the chunk is loaded first
-			var pcx := wx / CHUNK_X
-			var pcz := wz / CHUNK_Z
+			var pcx: int = wx / CHUNK_X
+			var pcz: int = wz / CHUNK_Z
 			_ensure_chunk(pcx, pcz)
 			return Vector3(wx + 0.5, h + 2, wz + 0.5)
 	return Vector3(0.5, 70, 0.5)
 
 func _ensure_chunk(pcx: int, pcz: int) -> void:
-	var key := Vector2i(pcx, pcz)
+	var key: Vector2i = Vector2i(pcx, pcz)
 	if not chunks.has(key):
-		var c := _create_chunk(pcx, pcz)
+		var c: Node = _create_chunk(pcx, pcz)
 		# Generate immediately
 		c.data = terrain.generate_chunk(pcx, pcz)
 		_apply_modifications(c)

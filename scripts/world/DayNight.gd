@@ -27,14 +27,14 @@ func setup(w: Node, p: Node) -> void:
         world = w
         player = p
         # Add ourselves to the world environment
-        var env_node := WorldEnvironment.new()
+        var env_node: WorldEnvironment = WorldEnvironment.new()
         env_node.name = "WorldEnv"
         env_node.environment = Environment.new()
         env_node.environment.background_mode = Environment.BG_SKY
         sky = ProceduralSkyMaterial.new()
         sky.sun_curve_max = 1.0
         sky.sun_curve_min = 0.1
-        var sky_box := Sky.new()
+        var sky_box: Sky = Sky.new()
         sky_box.sky_material = sky
         env_node.environment.sky = sky_box
         env_node.environment.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
@@ -84,8 +84,8 @@ func _process(delta: float) -> void:
                 day_count += 1
                 day_started.emit()
         # Emit hourly signal
-        var hour := int(time_of_day * 24)
-        var minute := int((time_of_day * 24 - hour) * 60)
+        var hour: int = int(time_of_day * 24)
+        var minute: int = int((time_of_day * 24 - hour) * 60)
         time_changed.emit(day_count, hour, minute)
         # Night started (when crossing into <0.22 or >0.78)
         if time_of_day > 0.78 or time_of_day < 0.22:
@@ -96,16 +96,16 @@ func _process(delta: float) -> void:
 func _update_sky() -> void:
         if environment == null: return
         var t := time_of_day
-        var sky_col := sky_gradient.sample(t)
+        var sky_col: Color = sky_gradient.sample(t)
         sky.sky_top_color = sky_col
         sky.sky_horizon_color = sky_col * 0.95
-        var sun_angle := (t - 0.25) * 360.0 # sunrise at t=0.25
+        var sun_angle: float = (t - 0.25) * 360.0 # sunrise at t=0.25
         # DirectionalLight3D direction is set via rotation, not a direct property.
         # Sun at sunrise (angle=0) should point from east (X+) to west.
         # We rotate the light so its -Z axis (default direction) points toward the sun.
         rotation = Vector3(deg_to_rad(sun_angle - 90), deg_to_rad(45), 0)
         # Light intensity: bright at noon, dim at night
-        var elevation := sin(deg_to_rad(sun_angle))
+        var elevation: float = sin(deg_to_rad(sun_angle))
         light_energy = clamp(elevation, 0, 1) * 1.1 + 0.05
         if elevation > 0:
                 light_color = Color(1, 0.95, 0.85)
@@ -123,5 +123,5 @@ func _update_sky() -> void:
         sky.ground_horizon_color = sky_col * 0.6
 
 func is_daytime() -> bool:
-        var elevation := sin(deg_to_rad((time_of_day - 0.25) * 360.0))
+        var elevation: float = sin(deg_to_rad((time_of_day - 0.25) * 360.0))
         return elevation > 0

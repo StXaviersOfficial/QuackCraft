@@ -62,10 +62,10 @@ func _configure_type() -> void:
 func _build_visual() -> void:
         # Simple colored box per mob type
         mesh_instance = MeshInstance3D.new()
-        var box := BoxMesh.new()
+        var box: BoxMesh = BoxMesh.new()
         box.size = Vector3(0.8, 1.6, 0.8)
         mesh_instance.mesh = box
-        var mat := StandardMaterial3D.new()
+        var mat: StandardMaterial3D = StandardMaterial3D.new()
         mat.albedo_color = _mob_color()
         mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
         mesh_instance.material_override = mat
@@ -73,8 +73,8 @@ func _build_visual() -> void:
         add_child(mesh_instance)
 
         # Collision shape
-        var col := CollisionShape3D.new()
-        var shape := CapsuleShape3D.new()
+        var col: CollisionShape3D = CollisionShape3D.new()
+        var shape: CapsuleShape3D = CapsuleShape3D.new()
         shape.height = 1.6
         shape.radius = 0.4
         col.shape = shape
@@ -110,7 +110,7 @@ func _physics_process(delta: float) -> void:
         # AI
         if player != null and is_instance_valid(player):
                 var to_player := player.position - position
-                var dist := to_player.length()
+                var dist: float = to_player.length()
                 if hostile and dist < detect_range:
                         state = "chase"
                 elif passive_flee and hurt_timer > 0 and dist < 12:
@@ -125,7 +125,7 @@ func _physics_process(delta: float) -> void:
                                 else:
                                         state = "wander"
                                         state_timer = randf_range(2.0, 4.0)
-                                        var ang := randf() * TAU
+                                        var ang: float = randf() * TAU
                                         wander_dir = Vector3(cos(ang), 0, sin(ang)).normalized()
                 # Movement based on state
                 var move := Vector3.ZERO
@@ -144,12 +144,12 @@ func _physics_process(delta: float) -> void:
                 velocity.z = move.z
                 # Face movement direction
                 if velocity.length() > 0.1:
-                        var look_target := position + Vector3(velocity.x, 0, velocity.z)
+                        var look_target: Vector3 = position + Vector3(velocity.x, 0, velocity.z)
                         if look_target != position:
                                 look_at(look_target, Vector3.UP)
         # Bomber special: explode when adjacent to player
         if mob_type == "bomber" and player != null:
-                var d := position.distance_to(player.position)
+                var d: float = position.distance_to(player.position)
                 if d < 2.5 and not dying:
                         _explode()
         # Special: crawler can climb walls (disable gravity when adjacent)
@@ -164,7 +164,7 @@ func _attack_player() -> void:
         mesh_instance.material_override.albedo_color = _mob_color() * 1.5
         # Damage
         if player.has_method("take_damage"):
-                var dir := (player.position - position).normalized()
+                var dir: Vector3 = (player.position - position).normalized()
                 player.take_damage(damage, dir)
         await get_tree().create_timer(0.15).timeout
         if is_instance_valid(mesh_instance) and mesh_instance.material_override != null:
@@ -174,17 +174,17 @@ func _explode() -> void:
         dying = true
         # Damage player if close
         if player != null:
-                var d := position.distance_to(player.position)
+                var d: float = position.distance_to(player.position)
                 if d < 4.0:
-                        var dir := (player.position - position).normalized()
+                        var dir: Vector3 = (player.position - position).normalized()
                         player.take_damage(15.0, dir)
         # Spawn explosion particles (simplified: red flash cube)
         mesh_instance.scale = Vector3(2, 2, 2)
         mesh_instance.material_override.albedo_color = Color(1, 0.5, 0.1, 1)
         # Damage blocks around (crater)
-        var bx := int(position.x)
-        var by := int(position.y)
-        var bz := int(position.z)
+        var bx: int = int(position.x)
+        var by: int = int(position.y)
+        var bz: int = int(position.z)
         for dx in range(-2, 3):
                 for dy in range(-2, 3):
                         for dz in range(-2, 3):
@@ -207,12 +207,12 @@ func take_damage(amount: float) -> void:
 func _die() -> void:
         dying = true
         # Drop loot (simplified)
-        var drop_id := _mob_drop()
+        var drop_id: int = _mob_drop()
         if drop_id != B.AIR:
                 # In a full impl we'd spawn a dropped item entity; for v1, give to player
                 pass
         # Visual: shrink + fade
-        var t := create_tween()
+        var t: SceneTreeTween = create_tween()
         t.tween_property(mesh_instance, "scale", Vector3(0.01, 0.01, 0.01), 1.0)
         t.parallel().tween_property(mesh_instance, "transparency", 1.0, 1.0)
 

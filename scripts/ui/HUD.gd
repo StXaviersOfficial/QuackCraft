@@ -72,11 +72,11 @@ func _process(_delta: float) -> void:
 	if player != null and player.mining:
 		var p = player.get_mining_progress()
 		# Update crosshair color via mobile controls crack overlay
-		var mc = get_parent().get_node_or_null("MobileControls")
+		var mc: Node = get_parent().get_node_or_null("MobileControls")
 		if mc != null:
-			var stage := int(p * 10)
+			var stage: int = int(p * 10)
 			mc.set_crack_stage(stage)
 	else:
-		var mc = get_parent().get_node_or_null("MobileControls")
+		var mc: Node = get_parent().get_node_or_null("MobileControls")
 		if mc != null:
 			mc.set_crack_stage(0)
