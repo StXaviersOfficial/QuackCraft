@@ -58,8 +58,6 @@ func _ready() -> void:
 	atlas_material.alpha_scissor_threshold = 0.3
 	atlas_material.cull_mode = BaseMaterial3D.CULL_DISABLED # show both sides for cross blocks
 	atlas_material.no_depth_test = false
-	# Disable ambient occlusion (cheaper on mobile)
-	atlas_material.gi_mode = BaseMaterial3D.GI_MODE_DISABLED
 
 	terrain = TG.new(seed_val)
 

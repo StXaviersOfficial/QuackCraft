@@ -101,13 +101,13 @@ func build_mesh(world: Node, chunk: Node) -> Dictionary:
 					continue
 				var def: Dictionary = B.get_def(id)
 				var render: String = def.get("render", "cube")
-				var wx := chunk.cx * CHUNK_X + x
-				var wz := chunk.cz * CHUNK_Z + z
+				var wx: int = chunk.cx * CHUNK_X + x
+				var wz: int = chunk.cz * CHUNK_Z + z
 				if render == "cube":
 					# Build each face only if the neighbor is air or transparent
 					for f in range(6):
-						var face := FACES[f]
-						var nb := Vector3i(x + face.dir.x, y + face.dir.y, z + face.dir.z)
+						var face: Dictionary = FACES[f]
+						var nb: Vector3i = Vector3i(x + face.dir.x, y + face.dir.y, z + face.dir.z)
 						var nblock: int = _get_block_or_neighbor(world, chunk, nb.x, nb.y, nb.z)
 						# Cull if neighbor is opaque
 						if B.is_opaque_cube(nblock):
@@ -119,7 +119,7 @@ func build_mesh(world: Node, chunk: Node) -> Dictionary:
 						if id == nblock:
 							continue
 						# Pick tile (top/side/bottom based on face)
-						var tile: int = def.side
+						var tile: int = int(def.side)
 						if face.dir.y > 0: tile = def.top
 						elif face.dir.y < 0: tile = def.bottom
 						var uv_origin: Vector2 = B.tile_to_uv(tile)
@@ -150,7 +150,7 @@ func build_mesh(world: Node, chunk: Node) -> Dictionary:
 								collision_faces.append(Vector3(x, y, z) + c)
 				elif render == "cross":
 					# Billboard cross (flowers, grass, etc.)
-					var tile: int = def.side
+					var tile: int = int(def.side)
 					var uv_origin: Vector2 = B.tile_to_uv(tile)
 					var uv_sz: Vector2 = B.tile_size_uv()
 					_add_cross(cross_verts, cross_uvs, cross_normals, cross_indices, cross_colors,
@@ -158,16 +158,16 @@ func build_mesh(world: Node, chunk: Node) -> Dictionary:
 				elif render == "fluid":
 					# Render only top face + side faces (against non-fluid neighbor)
 					for f in range(6):
-						var face := FACES[f]
+						var face: Dictionary = FACES[f]
 						if face.dir.y < 0:
 							continue # don't render bottom of fluid (perf)
-						var nb := Vector3i(x + face.dir.x, y + face.dir.y, z + face.dir.z)
+						var nb: Vector3i = Vector3i(x + face.dir.x, y + face.dir.y, z + face.dir.z)
 						var nblock: int = _get_block_or_neighbor(world, chunk, nb.x, nb.y, nb.z)
 						if B.is_opaque_cube(nblock):
 							continue
 						if nblock == id:
 							continue
-						var tile: int = def.side
+						var tile: int = int(def.side)
 						var uv_origin: Vector2 = B.tile_to_uv(tile)
 						var uv_sz: Vector2 = B.tile_size_uv()
 						_add_quad(opaque_verts, opaque_uvs, opaque_normals, opaque_indices, opaque_colors,
@@ -217,8 +217,8 @@ func _get_block_or_neighbor(world: Node, chunk: Node, x: int, y: int, z: int) ->
 	if x >= 0 and x < CHUNK_X and y >= 0 and y < CHUNK_Y and z >= 0 and z < CHUNK_Z:
 		return chunk.get_voxel_local(x, y, z)
 	# Outside: query world (returns AIR if neighbor chunk not loaded)
-	var wx := chunk.cx * CHUNK_X + x
-	var wz := chunk.cz * CHUNK_Z + z
+	var wx: int = chunk.cx * CHUNK_X + x
+	var wz: int = chunk.cz * CHUNK_Z + z
 	return world.get_block(wx, y, wz)
 
 func _add_quad(verts, uvs, normals, indices, colors, origin: Vector3, face: Dictionary, uv_origin: Vector2, uv_sz: Vector2, color: Color) -> void:
