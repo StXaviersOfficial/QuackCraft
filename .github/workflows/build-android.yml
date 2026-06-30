@@ -123,8 +123,29 @@ jobs:
           fi
           echo "Templates installed:"
           ls -la *.apk 2>/dev/null
-          # Also check for the gradle build template
           ls -la *.zip 2>/dev/null || echo "(no zip templates)"
+
+      - name: Install Android Gradle build template into project
+        run: |
+          # When gradle_build/use_gradle_build=true, Godot expects the Android
+          # source build template to be present at android/build/ in the project.
+          # This is normally done via the editor's "Install Android Build Template"
+          # menu item. In headless CI we extract android-source.zip from the
+          # export templates directly.
+          TEMPLATE_SRC=~/.local/share/godot/export_templates/4.4.stable/android-source.zip
+          if [ ! -f "$TEMPLATE_SRC" ]; then
+            echo "::error::android-source.zip not found in templates dir"
+            ls -la ~/.local/share/godot/export_templates/4.4.stable/
+            exit 1
+          fi
+          mkdir -p android/build
+          unzip -q -o "$TEMPLATE_SRC" -d android/build/
+          echo "Android build template installed:"
+          ls android/build/ | head -20
+          # Verify gradle wrapper is present
+          test -f android/build/gradlew || { echo "gradlew missing!"; ls android/build/; exit 1; }
+          chmod +x android/build/gradlew
+          echo "Gradle wrapper OK."
 
       - name: Generate Android launcher icons (if not present)
         run: |
