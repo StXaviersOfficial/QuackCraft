@@ -167,13 +167,17 @@ jobs:
           echo "Working directory: $(pwd)"
           echo "GODOT_BIN=$GODOT_BIN"
           mkdir -p build
-          # Import project resources first
-          ./"$GODOT_BIN" --headless --import 2>&1 | tail -30
-          # Export the APK
-          ./"$GODOT_BIN" --headless --export-release "Android" build/QuackCraft.apk 2>&1 | tail -60
+          # Show the patched export_presets.cfg for debugging
+          echo "=== export_presets.cfg ==="
+          cat export_presets.cfg
+          echo "=== End export_presets.cfg ==="
+          # Import project resources first (let it complete fully)
+          ./"$GODOT_BIN" --headless --path . --import 2>&1 || true
+          # Export the APK with verbose output
+          ./"$GODOT_BIN" --headless --path . --export-release "Android" build/QuackCraft.apk 2>&1 || true
           if [ ! -f build/QuackCraft.apk ]; then
-            echo "First export failed, retrying..."
-            ./"$GODOT_BIN" --headless --export-release "Android" build/QuackCraft.apk 2>&1 | tail -60
+            echo "=== First export failed, retrying with verbose ==="
+            ./"$GODOT_BIN" --headless --path . --verbose --export-release "Android" build/QuackCraft.apk 2>&1 || true
           fi
           ls -la build/
 
