@@ -9,8 +9,8 @@ const MobManagerClass = preload("res://scripts/mobs/MobManager.gd")
 const DayNightClass = preload("res://scripts/world/DayNight.gd")
 const HUDClass = preload("res://scripts/ui/HUD.gd")
 
-var world: Node3D
-var player: Node3D
+var world: WorldClass
+var player: PlayerClass
 var mobile_controls: CanvasLayer
 var mob_manager: Node
 var day_night: Node
@@ -26,10 +26,10 @@ func _ready() -> void:
 	WorldRef.set_world(world)
 
 	# Force-load spawn chunk before placing player
-	var spawn := world.find_spawn()
+	var spawn: Vector3 = world.find_spawn()
 	# Pre-generate the spawn chunk
-	var pcx := int(spawn.x) / world.CHUNK_X
-	var pcz := int(spawn.z) / world.CHUNK_Z
+	var pcx: int = int(spawn.x) / world.CHUNK_X
+	var pcz: int = int(spawn.z) / world.CHUNK_Z
 	world._ensure_chunk(pcx, pcz)
 	# Pre-load a small ring of chunks around spawn
 	for dz in range(-2, 3):
@@ -87,8 +87,8 @@ func _process(_delta: float) -> void:
 	if Input.is_action_just_pressed("hotbar_8"): player.select_hotbar(7)
 	if Input.is_action_just_pressed("hotbar_9"): player.select_hotbar(8)
 	if Input.is_action_just_pressed("inventory"):
-		var inv = hud.get_node_or_null("InventoryUI")
-		if inv != null:
+		var inv: Node = hud.get_node_or_null("InventoryUI")
+		if inv != null and inv.has_method("toggle"):
 			inv.toggle()
 	# Desktop mouse look (right-click to look, left-click to mine/place)
 	# These are emulated as touch — but Godot 4 emulates mouse as touch via setting

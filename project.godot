@@ -9,7 +9,7 @@ config_version=5
 config/name="QuackCraft"
 config/description="An original voxel building & survival sandbox for Android."
 run/main_scene="res://scenes/Main.tscn"
-config/features=PackScriptLanguageFeatures,PackedScene
+config/features=PackedStringArray("PackScriptLanguageFeatures", "PackedScene")
 config/icon="res://icon.svg"
 config/version="0.1.0"
 
@@ -196,4 +196,3 @@ permissions/custom_permissions=PackedStringArray()
 permissions/take_pictures=false
 permissions/record_audio=false
 permissions/get_phone_state=false
-permissions/custom_permissions=PackedStringArray()

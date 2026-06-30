@@ -170,7 +170,8 @@ func _is_near_crafting_table() -> bool:
 	for dx in range(-2, 3):
 		for dy in range(-2, 3):
 			for dz in range(-2, 3):
-				if WorldRef.get_world().get_block(bx + dx, by + dy, bz + dz) == B.CRAFTING_TABLE:
+				var world_node = WorldRef.get_world()
+				if world_node != null and world_node.get_block(bx + dx, by + dy, bz + dz) == B.CRAFTING_TABLE:
 					return true
 	return false
 
