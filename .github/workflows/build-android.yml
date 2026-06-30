@@ -132,7 +132,7 @@ jobs:
           # This is normally done via the editor's "Install Android Build Template"
           # menu item. In headless CI we extract android-source.zip from the
           # export templates directly.
-          TEMPLATE_SRC=~/.local/share/godot/export_templates/4.4.stable/android-source.zip
+          TEMPLATE_SRC=~/.local/share/godot/export_templates/4.4.stable/android_source.zip
           if [ ! -f "$TEMPLATE_SRC" ]; then
             echo "::error::android-source.zip not found in templates dir"
             ls -la ~/.local/share/godot/export_templates/4.4.stable/
