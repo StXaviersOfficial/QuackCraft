@@ -1,0 +1,247 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: build-android-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build & Publish APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies (Pillow)
+        run: |
+          python -m pip install --upgrade pip
+          pip install Pillow
+
+      - name: Regenerate texture atlas & sounds
+        run: |
+          python scripts_gen/gen_atlas.py
+          python scripts_gen/gen_sounds.py
+
+      - name: Commit regenerated assets (if changed)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add assets/textures/atlas.png assets/sounds/*.wav 2>/dev/null || true
+          if ! git diff --staged --quiet; then
+            git commit -m "chore: regenerate assets [skip ci]"
+            git push
+          else
+            echo "No asset changes to commit."
+          fi
+
+      - name: Determine Godot version
+        id: godot_version
+        run: |
+          # Pin to a specific stable Godot 4.x release that has matching Android templates.
+          echo "version=4.3-stable" >> $GITHUB_OUTPUT
+          echo "Using Godot 4.3-stable"
+
+      - name: Download Godot editor (headless Linux)
+        run: |
+          GODOT_VERSION="${{ steps.godot_version.outputs.version }}"
+          wget -q "https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}-linux.x86_64.zip" -O godot.zip
+          unzip -q godot.zip
+          # Find the Godot binary
+          GODOT_BIN=$(find . -maxdepth 1 -name "Godot_v*" -type f -executable | head -n1)
+          echo "GODOT_BIN=$GODOT_BIN" >> $GITHUB_ENV
+          chmod +x "$GODOT_BIN"
+          ./"$GODOT_BIN" --version
+
+      - name: Download Android export templates
+        run: |
+          GODOT_VERSION="${{ steps.godot_version.outputs.version }}"
+          wget -q "https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}-export_templates.tpz" -O templates.tpz
+          mkdir -p ~/.local/share/godot/export_templates/${GODOT_VERSION}
+          cd ~/.local/share/godot/export_templates/${GODOT_VERSION}
+          unzip -q ~/work/QuackCraft/QuackCraft/templates.tpz
+          # The .tpz has a templates/ subdir; move its contents up
+          if [ -d "templates" ]; then
+            mv templates/* .
+            rmdir templates
+          fi
+          ls -la
+
+      - name: Set up Android SDK (for export signing)
+        run: |
+          # Godot 4's Android export can produce an unsigned/debug APK without
+          # the Android SDK if we use the bundled templates. We just need Java
+          # for jarsigner to sign the APK with the debug keystore.
+          sudo apt-get update -y
+          sudo apt-get install -y default-jdk
+
+      - name: Create build output directory
+        run: mkdir -p build
+
+      - name: Configure debug keystore (if secrets not set)
+        id: keystore
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KS_B64" ]; then
+            echo "No keystore secret — using debug keystore."
+            echo "use_debug=true" >> $GITHUB_OUTPUT
+            # Generate a Godot-style debug keystore
+            keytool -keytool -genkey -keystore debug.keystore \
+              -storepass android -alias androiddebugkey -keypass android \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US" 2>&1 || \
+              keytool -genkey -keystore debug.keystore \
+              -storepass android -alias androiddebugkey -keypass android \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+            echo "keystore_path=$(pwd)/debug.keystore" >> $GITHUB_OUTPUT
+            echo "keystore_pass=android" >> $GITHUB_OUTPUT
+            echo "key_alias=androiddebugkey" >> $GITHUB_OUTPUT
+            echo "key_pass=android" >> $GITHUB_OUTPUT
+          else
+            echo "Using release keystore from secrets."
+            echo "use_debug=false" >> $GITHUB_OUTPUT
+            echo "$KS_B64" | base64 -d > release.keystore
+            echo "keystore_path=$(pwd)/release.keystore" >> $GITHUB_OUTPUT
+            echo "keystore_pass=$KS_PASS" >> $GITHUB_OUTPUT
+            echo "key_alias=$KEY_ALIAS" >> $GITHUB_OUTPUT
+            echo "key_pass=$KEY_PASS" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Patch export_presets.cfg with keystore paths
+        env:
+          KS_PATH: ${{ steps.keystore.outputs.keystore_path }}
+          KS_PASS: ${{ steps.keystore.outputs.keystore_pass }}
+          KEY_ALIAS: ${{ steps.keystore.outputs.key_alias }}
+          KEY_PASS: ${{ steps.keystore.outputs.key_pass }}
+        run: |
+          # Update the export_presets.cfg with our keystore
+          python3 - <<'EOF'
+          import os
+          path = "export_presets.cfg"
+          with open(path, "r") as f:
+              content = f.read()
+          ks_path = os.environ["KS_PATH"]
+          ks_pass = os.environ["KS_PASS"]
+          key_alias = os.environ["KEY_ALIAS"]
+          key_pass = os.environ["KEY_PASS"]
+          content = content.replace(
+              'keystore/debug=""',
+              f'keystore/debug="{ks_path}"'
+          )
+          content = content.replace(
+              'keystore/debug_user=""',
+              f'keystore/debug_user="{key_alias}"'
+          )
+          content = content.replace(
+              'keystore/debug_password=""',
+              f'keystore/debug_password="{ks_pass}"'
+          )
+          content = content.replace(
+              'keystore/release=""',
+              f'keystore/release="{ks_path}"'
+          )
+          content = content.replace(
+              'keystore/release_user=""',
+              f'keystore/release_user="{key_alias}"'
+          )
+          content = content.replace(
+              'keystore/release_password=""',
+              f'keystore/release_password="{ks_pass}"'
+          )
+          # Set signed=true
+          content = content.replace('package/signed=false', 'package/signed=true')
+          with open(path, "w") as f:
+              f.write(content)
+          print("Patched export_presets.cfg")
+          EOF
+
+      - name: Export Android APK
+        run: |
+          cd ~/work/QuackCraft/QuackCraft
+          ./"$GODOT_BIN" --headless --import
+          ./"$GODOT_BIN" --headless --export-release "Android" build/QuackCraft.apk 2>&1 || true
+          # Retry once if it failed (sometimes the first import is incomplete)
+          if [ ! -f build/QuackCraft.apk ]; then
+            echo "First export failed, retrying..."
+            ./"$GODOT_BIN" --headless --export-release "Android" build/QuackCraft.apk
+          fi
+          ls -la build/
+
+      - name: Verify APK
+        run: |
+          if [ ! -f build/QuackCraft.apk ]; then
+            echo "::error::APK was not produced!"
+            exit 1
+          fi
+          # Verify it's a valid ZIP/APK
+          unzip -l build/QuackCraft.apk | head -10
+
+      - name: Compute next version tag
+        id: next_tag
+        run: |
+          # Fetch latest tag
+          git fetch --tags
+          LATEST=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "Latest tag: $LATEST"
+          # Parse vMAJOR.MINOR.PATCH and increment PATCH
+          MAJOR=$(echo $LATEST | sed 's/v//' | cut -d. -f1)
+          MINOR=$(echo $LATEST | sed 's/v//' | cut -d. -f2)
+          PATCH=$(echo $LATEST | sed 's/v//' | cut -d. -f3)
+          PATCH=$((PATCH + 1))
+          NEW_TAG="v${MAJOR}.${MINOR}.${PATCH}"
+          echo "New tag: $NEW_TAG"
+          echo "tag=$NEW_TAG" >> $GITHUB_OUTPUT
+
+      - name: Upload APK as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: QuackCraft-apk
+          path: build/QuackCraft.apk
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.next_tag.outputs.tag }}
+          name: QuackCraft ${{ steps.next_tag.outputs.tag }}
+          body: |
+            # QuackCraft ${{ steps.next_tag.outputs.tag }}
+
+            Auto-built from commit ${{ github.sha }}.
+
+            **Install:** Download `QuackCraft.apk` below, allow "Install from unknown sources" on your Android phone, then tap to install.
+
+            **Min Android version:** 5.0 (API 21)
+            **Target Android version:** 14 (API 34)
+            **Architectures:** armeabi-v7a, arm64-v8a
+
+            Built with Godot 4.3-stable on ${{ github.event.head_commit.timestamp }}.
+          files: build/QuackCraft.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

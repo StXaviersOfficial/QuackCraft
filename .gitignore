@@ -1,0 +1,33 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+/build/
+
+# Imported translations (automatically generated)
+*.translation
+
+# Mono / C# specific (not used here but standard)
+.mono/
+data_*/
+mono_crash.*.json
+
+# System / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.bak
+
+# Build outputs
+*.apk
+*.aab
+*.keystore
+export_presets.cfg.bak
+
+# Don't ignore the export_presets.cfg itself though — we DO want it tracked
+!export_presets.cfg
+
+# Python virtualenvs used for asset generation
+.venv/
+__pycache__/
+*.pyc
