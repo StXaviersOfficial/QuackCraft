@@ -30,12 +30,15 @@ var camera: Camera3D
 var head: Node3D
 var pitch: float = 0.0
 var yaw: float = 0.0
-var mouse_look: bool = false
 
 # Mobile input state
 var move_vector: Vector2 = Vector2.ZERO  # x=strafe, y=forward
 var jump_held: bool = false
-var look_delta: Vector2 = Vector2.ZERO  # accumulated look delta from right-side drag
+var sprint_held: bool = false
+
+# Fall damage tracking
+var last_floor_y: float = 0.0
+var was_on_floor: bool = true
 
 # Block interaction
 var targeted_block: Dictionary = {} # raycast result
@@ -114,7 +117,9 @@ func _physics_process(delta: float) -> void:
         input_vec.y += Input.get_action_strength("move_forward") - Input.get_action_strength("move_backward")
         input_vec.x += Input.get_action_strength("move_right") - Input.get_action_strength("move_left")
         input_vec += move_vector
-        input_vec = input_vec.clampf(-1.0, 1.0)
+        # Clamp the VECTOR, not individual components (clampf is for floats)
+        if input_vec.length() > 1.0:
+                input_vec = input_vec.normalized()
         var move_dir: Vector3 = forward * input_vec.y + right * input_vec.x
         move_dir = move_dir.normalized() * min(move_dir.length(), 1.0)
         velocity.x = move_dir.x * speed
@@ -126,6 +131,15 @@ func _physics_process(delta: float) -> void:
         if knockback.length() > 0.1:
                 velocity += knockback
                 knockback = knockback.move_toward(Vector3.ZERO, 8.0 * delta)
+        # Track fall distance for fall damage
+        if is_on_floor():
+                var fall_dist: float = last_floor_y - position.y
+                if fall_dist > 4.0 and was_on_floor == false:
+                        # Fall damage: 1 damage per block above 4 blocks
+                        var dmg: float = fall_dist - 4.0
+                        take_damage(dmg, Vector3.ZERO)
+                last_floor_y = position.y
+        was_on_floor = is_on_floor()
         # Apply look
         _apply_look()
         # Move
@@ -162,8 +176,7 @@ func _physics_process(delta: float) -> void:
                 _die()
 
 func _is_sprinting_mobile() -> bool:
-        # Double-tap joystick triggers sprint (handled by MobileControls)
-        return false
+        return sprint_held
 
 func _apply_look() -> void:
         rotation.y = deg_to_rad(yaw)
@@ -219,7 +232,7 @@ func _tool_mining_speed(item_id: int, block_id: int) -> float:
         var req: Dictionary = B.get_required_tool(block_id)
         # Check ItemRegistry for tool type/tier of item_id
         var item: Dictionary = ItemRegistry.get_item(item_id)
-        if item == null or not item.has("tool_type"):
+        if item.is_empty() or not item.has("tool_type"):
                 return 1.0 if req.type == B.ToolType.NONE else 0.3
         var tool_type: int = item.get("tool_type", B.ToolType.NONE)
         var tool_tier: int = item.get("tool_tier", B.ToolTier.HAND)
@@ -265,7 +278,8 @@ func try_place_block() -> bool:
         if hotbar[hotbar_index] == null:
                 return false
         var id: int = hotbar[hotbar_index].id
-        if not B.is_solid(id) and B.get_render(id) == "none":
+        # Can't place AIR or blocks with no render
+        if B.get_render(id) == "none":
                 return false
         # Place adjacent to hit face
         var pos: Vector3i = targeted_block.pos + targeted_block.normal
