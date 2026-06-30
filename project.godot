@@ -138,6 +138,8 @@ environment/defaults/default_clear_color=Color(0.66, 0.81, 0.96, 1)
 mesh_lod/lod_change/threshold_pixels=8.0
 lights_and_shadows/directional_shadow/size=1024
 lights_and_shadows/directional_shadow/soft_shadow_filter=0
+textures/vram_compression/import_etc2_astc=true
+textures/vram_compression/import_s3tc_bptc=true
 
 [input_devices]
 
